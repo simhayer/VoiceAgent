@@ -6,8 +6,8 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import PROCEDURE_DURATIONS, Appointment
-from app.models.availability import AvailabilityRule
 from app.models.provider import Provider
+from app.services.cache import get_providers, get_rules
 
 
 async def get_available_slots(
@@ -27,16 +27,9 @@ async def get_available_slots(
     duration = PROCEDURE_DURATIONS.get(procedure_type, 30)
     slot_increment = 30
 
-    stmt = select(Provider)
-    if provider_id:
-        stmt = stmt.where(Provider.id == provider_id)
-    result = await db.execute(stmt)
-    providers = list(result.scalars().all())
+    providers = get_providers(provider_id)
     provider_ids = [p.id for p in providers]
-
-    rules_stmt = select(AvailabilityRule).where(AvailabilityRule.provider_id.in_(provider_ids))
-    rules_result = await db.execute(rules_stmt)
-    all_rules = list(rules_result.scalars().all())
+    all_rules = get_rules(provider_ids)
 
     date_from_dt = datetime.combine(date_from, time.min)
     date_to_dt = datetime.combine(date_to, time.max)

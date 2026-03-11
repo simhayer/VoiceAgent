@@ -1,6 +1,7 @@
 """LangGraph tool definitions wrapping the existing service layer."""
 
 import json
+from contextvars import ContextVar, Token
 from datetime import date, datetime, timedelta
 
 from langchain_core.tools import tool
@@ -13,18 +14,22 @@ from app.services.scheduling import get_available_slots as _get_available_slots
 
 # The db session is injected at runtime via the graph's config.
 # Tools receive it from the graph state via a closure.
-_active_db: AsyncSession | None = None
+_active_db: ContextVar[AsyncSession | None] = ContextVar("active_db", default=None)
 
 
-def set_active_db(db: AsyncSession):
-    global _active_db
-    _active_db = db
+def set_active_db(db: AsyncSession) -> Token:
+    return _active_db.set(db)
+
+
+def reset_active_db(token: Token):
+    _active_db.reset(token)
 
 
 def _get_db() -> AsyncSession:
-    if _active_db is None:
+    db = _active_db.get()
+    if db is None:
         raise RuntimeError("No active database session — set_active_db() must be called before running the agent")
-    return _active_db
+    return db
 
 
 @tool

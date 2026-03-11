@@ -5,6 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.appointment import Appointment
@@ -14,6 +15,7 @@ from app.models.patient import Patient
 from app.models.provider import Provider
 from app.schemas.appointment import AppointmentOut
 from app.schemas.patient import PatientCreate, PatientOut
+from app.services import cache as ref_cache
 from app.services.scheduling import cancel_appointment
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -58,7 +60,7 @@ async def list_appointments(
     date_to: date | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Appointment)
+    stmt = select(Appointment).options(selectinload(Appointment.provider))
     if status:
         stmt = stmt.where(Appointment.status == status)
     if date_from:
@@ -71,10 +73,8 @@ async def list_appointments(
 
     results = []
     for a in appointments:
-        prov_result = await db.execute(select(Provider).where(Provider.id == a.provider_id))
-        provider = prov_result.scalars().first()
         out = AppointmentOut.model_validate(a)
-        out.provider_name = provider.name if provider else None
+        out.provider_name = a.provider.name if a.provider else None
         results.append(out)
     return results
 
@@ -127,3 +127,10 @@ async def upsert_office_config(key: str, value: str, category: str = "general", 
         db.add(entry)
     await db.commit()
     return {"key": key, "value": value, "category": category}
+
+
+@router.post("/refresh-cache")
+async def refresh_cache(db: AsyncSession = Depends(get_db)):
+    """Re-load providers and availability rules into the in-memory cache."""
+    await ref_cache.refresh(db)
+    return {"status": "ok", "providers": len(ref_cache.get_providers()), "rules": len(ref_cache.get_rules())}
