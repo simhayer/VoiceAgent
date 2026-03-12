@@ -19,6 +19,9 @@ async def incoming_call(request: Request):
 
     Configure this URL as the webhook for your Twilio phone number.
     """
+    form_data = await request.form()
+    caller_phone = form_data.get("From", "Unknown")
+
     server_url = settings.server_url.replace("http://", "wss://").replace("https://", "wss://")
     stream_url = f"{server_url}/calls/stream"
 
@@ -26,7 +29,7 @@ async def incoming_call(request: Request):
 <Response>
     <Connect>
         <Stream url="{stream_url}">
-            <Parameter name="callerPhone" value="{{{{From}}}}" />
+            <Parameter name="callerPhone" value="{caller_phone}" />
         </Stream>
     </Connect>
 </Response>"""

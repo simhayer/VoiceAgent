@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Server
     server_url: str = "http://localhost:8000"
 
+    # Redis (for dashboard pub/sub)
+    redis_url: str = "redis://localhost:6379"
+
     model_config = {"env_file": ".env"}
 
 

@@ -11,6 +11,8 @@ from app.agent.prompts import get_system_prompt
 from app.agent.state import AgentState
 from app.agent.tools import ALL_TOOLS, set_active_db
 from app.config import settings
+from app.services.call_log_service import persist_message
+from app.services.pubsub import publish_event
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ async def agent_node(state: AgentState) -> dict:
 async def tool_node(state: AgentState) -> dict:
     """Execute any tool calls from the last AI message."""
     last_message: AIMessage = state["messages"][-1]
+    call_sid = state.get("call_sid", "")
     tool_results = []
 
     tool_map = {t.name: t for t in ALL_TOOLS}
@@ -40,13 +43,22 @@ async def tool_node(state: AgentState) -> dict:
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
         tool_args = tool_call["args"]
+        tool_call_id = tool_call["id"]
         logger.info("Executing tool: %s(%s)", tool_name, tool_args)
+
+        # Broadcast tool_start to dashboard
+        await publish_event("tool_start", call_sid, tool_name=tool_name, tool_args=tool_args, tool_call_id=tool_call_id)
+        await persist_message(call_sid, "tool_start", f"Using tool: {tool_name}", tool_name=tool_name, tool_args=tool_args)
 
         tool_fn = tool_map.get(tool_name)
         if tool_fn:
             result = await tool_fn.ainvoke(tool_args)
         else:
             result = f'{{"error": "Unknown tool: {tool_name}"}}'
+
+        # Broadcast tool_end to dashboard
+        await publish_event("tool_end", call_sid, tool_name=tool_name, tool_call_id=tool_call_id)
+        await persist_message(call_sid, "tool_end", f"Used tool: {tool_name}", tool_name=tool_name)
 
         tool_results.append(
             ToolMessage(content=str(result), tool_call_id=tool_call["id"])
@@ -77,6 +89,7 @@ agent_graph = graph_builder.compile()
 async def process_message(
     messages: list[dict],
     caller_phone: str,
+    call_sid: str,
     db: AsyncSession,
 ) -> str:
     """Run the agent graph on a conversation and return the final text response.
@@ -97,6 +110,7 @@ async def process_message(
     initial_state: AgentState = {
         "messages": lc_messages,
         "caller_phone": caller_phone,
+        "call_sid": call_sid,
     }
 
     result = await agent_graph.ainvoke(initial_state)

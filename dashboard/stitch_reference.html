@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Donezo Dashboard</title>
+<!-- Tailwind CSS v3 CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<style data-purpose="custom-styles">
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #F3F4F6;
+    }
+    .active-nav {
+      background-color: #ffffff;
+      color: #064E3B;
+      border-left: 4px solid #10B981;
+    }
+    .custom-shadow {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+    .semi-circle-gauge {
+      width: 200px;
+      height: 100px;
+      border-top-left-radius: 100px;
+      border-top-right-radius: 100px;
+      border: 20px solid #E5E7EB;
+      border-bottom: 0;
+      position: relative;
+    }
+    .gauge-fill {
+      position: absolute;
+      top: -20px;
+      left: -20px;
+      width: 200px;
+      height: 100px;
+      border-top-left-radius: 100px;
+      border-top-right-radius: 100px;
+      border: 20px solid #064E3B;
+      border-bottom: 0;
+      transform-origin: bottom center;
+      transform: rotate(73deg); /* Representing roughly 41% */
+    }
+  </style>
+</head>
+<body class="p-6">
+<!-- BEGIN: Main Dashboard Wrapper -->
+<div class="max-w-[1440px] mx-auto bg-white rounded-3xl overflow-hidden flex min-h-[900px] shadow-2xl">
+<!-- BEGIN: Sidebar Navigation -->
+<aside class="w-64 bg-gray-50 border-r border-gray-100 flex flex-col p-6" data-purpose="sidebar">
+<!-- Logo -->
+<div class="flex items-center gap-2 mb-10 px-2">
+<div class="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center">
+<div class="w-4 h-4 border-2 border-white rounded-full"></div>
+</div>
+<span class="text-xl font-bold text-gray-800">Donezo</span>
+</div>
+<!-- Menu Section -->
+<nav class="flex-1 space-y-1" data-purpose="main-menu">
+<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 px-2">Menu</p>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl active-nav font-medium" href="#">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Dashboard
+        </a>
+<a class="flex items-center justify-between px-4 py-3 text-gray-500 hover:text-emerald-600 transition-colors" href="#">
+<div class="flex items-center gap-3">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+            Tasks
+          </div>
+<span class="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">12+</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-emerald-600" href="#">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Calendar
+        </a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-emerald-600" href="#">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Analytics
+        </a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-emerald-600" href="#">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Team
+        </a>
+<!-- General Section -->
+<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-8 mb-4 px-2">General</p>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-emerald-600" href="#">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Settings
+        </a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-emerald-600" href="#">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Help
+        </a>
+<a class="flex items-center gap-3 px-4 py-3 text-red-400 hover:text-red-600" href="#">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Logout
+        </a>
+</nav>
+<!-- Mobile App Promo Card -->
+<div class="mt-auto bg-black rounded-2xl p-4 text-white relative overflow-hidden" data-purpose="mobile-promo">
+<div class="relative z-10">
+<div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mb-3">
+<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"></path></svg>
+</div>
+<p class="text-sm font-semibold leading-tight mb-1">Download our<br/>Mobile App</p>
+<p class="text-[10px] text-gray-400 mb-4">Get easy in another way</p>
+<button class="w-full bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold py-2 rounded-lg transition-colors">Download</button>
+</div>
+<!-- Decorative abstract background for the promo card -->
+<div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-900/40 rounded-full blur-2xl"></div>
+</div>
+</aside>
+<!-- END: Sidebar Navigation -->
+<!-- BEGIN: Main Content Area -->
+<main class="flex-1 overflow-y-auto p-8 bg-white" data-purpose="dashboard-main">
+<!-- Header Section -->
+<header class="flex items-center justify-between mb-8" data-purpose="header">
+<div class="relative w-96">
+<span class="absolute inset-y-0 left-0 flex items-center pl-3">
+<svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</span>
+<input class="w-full bg-gray-50 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-emerald-500" placeholder="Search task" type="text"/>
+<div class="absolute inset-y-0 right-0 flex items-center pr-3">
+<span class="text-[10px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">⌘F</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-gray-400">
+<button class="hover:text-emerald-600 transition-colors">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</button>
+<button class="hover:text-emerald-600 transition-colors relative">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<span class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+</button>
+</div>
+<div class="flex items-center gap-3 border-l pl-6 border-gray-100">
+<img alt="Totok Michael" class="w-10 h-10 rounded-full border border-emerald-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgnWYn-UGGv4EA2s0ulbvBv7lpGBG6Zk-LrNWMKtYDZc7reSwcOlW4YdcjtAy_B1fJX5TgmyQ9cfz8mHwn15ea8Ich60n5BqqPt2rnkqDif7guAPZIAtQ5mq6n7s9H-FeM7JHgz9ykfpkOpB3EiJWkEJ7iU2yyVsi8pBZRBXT4K8Sb2G50dH-b81YGBZzsvNN0skhVtoDxTNN4bj3IiWWewyWA_9mztUX6wzrZEraCcy-oLZfACQRwgs7DmkLNW8DdkcrMwacBeKk"/>
+<div class="text-left">
+<p class="text-sm font-bold text-gray-800 leading-none">Totok Michael</p>
+<p class="text-[10px] text-gray-400 mt-1">tmichael20@mail.com</p>
+</div>
+</div>
+</div>
+</header>
+<!-- Dashboard Title Section -->
+<section class="flex items-end justify-between mb-8">
+<div>
+<h1 class="text-3xl font-extrabold text-gray-900">Dashboard</h1>
+<p class="text-gray-400 mt-1">Plan, prioritize, and accomplish your tasks with ease.</p>
+</div>
+<div class="flex gap-3">
+<button class="bg-emerald-900 text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-emerald-800 transition-colors">
+<span class="text-xl leading-none">+</span> Add Project
+          </button>
+<button class="bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors">
+            Import Data
+          </button>
+</div>
+</section>
+<!-- BEGIN: Summary Cards Row -->
+<section class="grid grid-cols-4 gap-4 mb-8" data-purpose="summary-stats">
+<!-- Total Projects Card -->
+<div class="bg-emerald-800 p-6 rounded-[32px] text-white flex flex-col justify-between custom-shadow min-h-[160px]">
+<div class="flex justify-between items-start">
+<p class="text-sm font-medium opacity-90">Total Projects</p>
+<div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7V17" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+<div>
+<p class="text-4xl font-bold mb-2">24</p>
+<div class="flex items-center gap-1.5 text-[10px] font-semibold bg-emerald-700/50 w-max px-2 py-1 rounded-full">
+<span class="bg-white text-emerald-800 rounded px-1">5</span> Increased from last month
+            </div>
+</div>
+</div>
+<!-- Ended Projects Card -->
+<div class="bg-white p-6 rounded-[32px] border border-gray-100 flex flex-col justify-between custom-shadow min-h-[160px]">
+<div class="flex justify-between items-start">
+<p class="text-sm font-medium text-gray-500">Ended Projects</p>
+<div class="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-400">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7V17" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+<div>
+<p class="text-4xl font-bold text-gray-800 mb-2">10</p>
+<div class="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 w-max px-2 py-1 rounded-full border border-gray-100">
+<span class="bg-emerald-100 text-emerald-700 rounded px-1">6</span> Increased from last month
+            </div>
+</div>
+</div>
+<!-- Running Projects Card -->
+<div class="bg-white p-6 rounded-[32px] border border-gray-100 flex flex-col justify-between custom-shadow min-h-[160px]">
+<div class="flex justify-between items-start">
+<p class="text-sm font-medium text-gray-500">Running Projects</p>
+<div class="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-400">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7V17" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+<div>
+<p class="text-4xl font-bold text-gray-800 mb-2">12</p>
+<div class="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 w-max px-2 py-1 rounded-full border border-gray-100">
+<span class="bg-blue-100 text-blue-700 rounded px-1">2</span> Increased from last month
+            </div>
+</div>
+</div>
+<!-- Pending Projects Card -->
+<div class="bg-white p-6 rounded-[32px] border border-gray-100 flex flex-col justify-between custom-shadow min-h-[160px]">
+<div class="flex justify-between items-start">
+<p class="text-sm font-medium text-gray-500">Pending Project</p>
+<div class="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-400">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7V17" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+<div>
+<p class="text-4xl font-bold text-gray-800 mb-2">2</p>
+<p class="text-[10px] font-semibold text-gray-400">On Discuss</p>
+</div>
+</div>
+</section>
+<!-- END: Summary Cards Row -->
+<!-- BEGIN: Middle Dashboard Layout -->
+<section class="grid grid-cols-12 gap-8 mb-8" data-purpose="analytics-reminders-tasks">
+<!-- Project Analytics -->
+<div class="col-span-5 bg-white rounded-[32px] p-6 border border-gray-100 custom-shadow" data-purpose="chart-container">
+<h3 class="font-bold text-gray-800 mb-6">Project Analytics</h3>
+<div class="flex items-end justify-between h-48 px-2">
+<!-- Simple Mock Chart using Tailwind -->
+<div class="flex flex-col items-center gap-2 group">
+<div class="w-12 h-24 bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+<span class="text-xs font-semibold text-gray-400">S</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-12 h-36 bg-emerald-700 rounded-full"></div>
+<span class="text-xs font-semibold text-gray-400">M</span>
+</div>
+<div class="flex flex-col items-center gap-2 relative">
+<div class="absolute -top-6 bg-emerald-50 text-[10px] font-bold text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100">74%</div>
+<div class="w-12 h-20 bg-emerald-400 rounded-full"></div>
+<span class="text-xs font-semibold text-gray-400">T</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-12 h-44 bg-emerald-900 rounded-full"></div>
+<span class="text-xs font-semibold text-gray-400">W</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-12 h-32 bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+<span class="text-xs font-semibold text-gray-400">T</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-12 h-24 bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+<span class="text-xs font-semibold text-gray-400">F</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-12 h-28 bg-gray-100 rounded-full border-2 border-dashed border-gray-200"></div>
+<span class="text-xs font-semibold text-gray-400">S</span>
+</div>
+</div>
+</div>
+<!-- Reminders -->
+<div class="col-span-3 bg-white rounded-[32px] p-6 border border-gray-100 custom-shadow flex flex-col justify-between" data-purpose="reminders">
+<h3 class="font-bold text-gray-800 mb-4">Reminders</h3>
+<div class="space-y-4">
+<div class="border-l-4 border-emerald-600 pl-4">
+<p class="text-lg font-bold text-gray-800 leading-tight">Meeting with Arc Company</p>
+<p class="text-xs text-gray-400 mt-2">Time: 02:00 pm - 04:00 pm</p>
+</div>
+</div>
+<button class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all mt-4">
+<svg class="w-5 h-5" fill="currentColor" viewbox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"></path></svg>
+            Start Meeting
+          </button>
+</div>
+<!-- Project List -->
+<div class="col-span-4 bg-white rounded-[32px] p-6 border border-gray-100 custom-shadow" data-purpose="project-list">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-bold text-gray-800">Project</h3>
+<button class="text-[10px] font-bold text-gray-600 border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50">+ New</button>
+</div>
+<div class="space-y-4">
+<!-- Project Item -->
+<div class="flex items-center gap-3 group cursor-pointer">
+<div class="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<div>
+<p class="text-sm font-bold text-gray-800">Develop API Endpoints</p>
+<p class="text-[10px] text-gray-400">Due date: Nov 26, 2024</p>
+</div>
+</div>
+<!-- Project Item -->
+<div class="flex items-center gap-3 group cursor-pointer">
+<div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<div>
+<p class="text-sm font-bold text-gray-800">Onboarding Flow</p>
+<p class="text-[10px] text-gray-400">Due date: Nov 28, 2024</p>
+</div>
+</div>
+<!-- Project Item -->
+<div class="flex items-center gap-3 group cursor-pointer">
+<div class="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 group-hover:bg-amber-100 transition-colors">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<div>
+<p class="text-sm font-bold text-gray-800">Build Dashboard</p>
+<p class="text-[10px] text-gray-400">Due date: Nov 30, 2024</p>
+</div>
+</div>
+<!-- Project Item -->
+<div class="flex items-center gap-3 group cursor-pointer">
+<div class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-100 transition-colors">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<div>
+<p class="text-sm font-bold text-gray-800">Optimize Page Load</p>
+<p class="text-[10px] text-gray-400">Due date: Dec 5, 2024</p>
+</div>
+</div>
+<!-- Project Item -->
+<div class="flex items-center gap-3 group cursor-pointer">
+<div class="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 group-hover:bg-purple-100 transition-colors">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<div>
+<p class="text-sm font-bold text-gray-800">Cross-Browser Testing</p>
+<p class="text-[10px] text-gray-400">Due date: Dec 6, 2024</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Middle Dashboard Layout -->
+<!-- BEGIN: Bottom Section -->
+<section class="grid grid-cols-12 gap-8" data-purpose="bottom-row">
+<!-- Team Collaboration -->
+<div class="col-span-6 bg-white rounded-[32px] p-6 border border-gray-100 custom-shadow" data-purpose="team-collaboration">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-bold text-gray-800">Team Collaboration</h3>
+<button class="text-[10px] font-bold text-gray-600 border border-gray-200 px-3 py-1.5 rounded-xl hover:bg-gray-50">+ Add Member</button>
+</div>
+<div class="space-y-5">
+<!-- Member Row -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-gray-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuASJHR5EI6e8yD4qg2MtQRBUTZZUqig3Rf-UBGq_5Bdm7IxWaddUKU_JY_SfVM9DvhM2MJa34PlA-Ig7IqItbbJECyStmFz5cuu-31V1qYTlsos6XW60lbMqJY55lhe-MJjW3matl_2bpSbLxYpGxUkLz4Jrczu46YaG7oxkWIhQl01sH19PSg6q0iRTnkCF_tahsvXA2pP0Zgo1iAAbA4772FkL8ksW_r3lVjHdrNhulFCeKltBKQqmkScKEfOGZJyv8E-4brT63U"/>
+<div>
+<p class="text-xs font-bold text-gray-800 leading-none">Alexandra Deff</p>
+<p class="text-[10px] text-gray-400 mt-1">Working on <span class="text-gray-600 font-medium">Github Project Repository</span></p>
+</div>
+</div>
+<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Completed</span>
+</div>
+<!-- Member Row -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-gray-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAeCwu8hEdeIvF69w3vns5Y9wQblP6uvcHjeXuL2-2f609YX4RlGRVmcGim3mv2bc_1L78nGl24TBaNfUlb5lFjZ68qkif3_SBXFVdvE4Wtp85jvB6ngKZ3D07bgZSL8iarpXmFiFFX0gk2KhEKQGk1rEN7EoA0o9-Y-m9ARc0oBujt-unTKhiC652hOW2ApGF30i2fwEUZXBKytCWlXow_rZW4ObjT2aoKueSIJ-C3Hh-hC_QZSyXnXcvG8fRUEf637N0NpMZW5js"/>
+<div>
+<p class="text-xs font-bold text-gray-800 leading-none">Edwin Adenike</p>
+<p class="text-[10px] text-gray-400 mt-1">Working on <span class="text-gray-600 font-medium">Integrate User Authentication System</span></p>
+</div>
+</div>
+<span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">In Progress</span>
+</div>
+<!-- Member Row -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-gray-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUQ5MzcO2iSLGoQ3efKWXydvbWooFT3wF8FIYhwD50JJxQeDrkFde8URjKak_L3dH_xzSsy-_9xtL4WFlF7HMU3AF__E5gzrQWqo1VczaWYihwWEteZb6REHGZd6ffqyGgYEBA60U8CnRG-aekyho93O-FmIjSvpouQ5EMLF2kFOtTA74w1LW_Rs4IbA_RtxX_mfh0-aqEwP5qJqd7HbODD2cujHfDPSTT7mvdMvMcgi35E-7DjzdBOhKkL9qjjGx4UWy8se_NjEs"/>
+<div>
+<p class="text-xs font-bold text-gray-800 leading-none">Isaac Oluwatemilorun</p>
+<p class="text-[10px] text-gray-400 mt-1">Working on <span class="text-gray-600 font-medium">Develop Search and Filter Functionality</span></p>
+</div>
+</div>
+<span class="text-[9px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">Pending</span>
+</div>
+<!-- Member Row -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-gray-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBRxge4gEKxt9whFl-FbFiC8zDMmg79uyBuii2wR_RHj11iJsaUy4xamMavaAeHdy0VD4uGTbBR2rXg-Icnb66Zrh0fVqSYuIiYnzA2TLxlla6c88YDYskKjiiVCB1qMee5w2-x61tJmkF0d95tD12JmYO6SSWwIVWiPlqKi0H-ZehsRoUVF5Pt8OIebPf2_ofDpYc6igmRhvilGd4aCFAALCzgPMQFOL47TVn-nXzf-3Yl6oDIJjF62Ds-1oJ8_4mPImlZKIgxrmE"/>
+<div>
+<p class="text-xs font-bold text-gray-800 leading-none">David Oshodi</p>
+<p class="text-[10px] text-gray-400 mt-1">Working on <span class="text-gray-600 font-medium">Responsive Layout for Homepage</span></p>
+</div>
+</div>
+<span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">In Progress</span>
+</div>
+</div>
+</div>
+<!-- Project Progress Gauge -->
+<div class="col-span-3 bg-white rounded-[32px] p-6 border border-gray-100 custom-shadow flex flex-col items-center" data-purpose="project-progress">
+<div class="w-full text-left">
+<h3 class="font-bold text-gray-800 mb-6">Project Progress</h3>
+</div>
+<div class="relative mt-4">
+<div class="semi-circle-gauge">
+<div class="gauge-fill"></div>
+</div>
+<div class="absolute inset-x-0 top-1/2 text-center">
+<p class="text-4xl font-extrabold text-gray-900 leading-none">41%</p>
+<p class="text-xs text-gray-400 mt-1">Project Ended</p>
+</div>
+</div>
+<!-- Legend -->
+<div class="flex gap-4 mt-12">
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-gray-500">
+<div class="w-2.5 h-2.5 bg-emerald-700 rounded-full"></div> Completed
+            </div>
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-gray-500">
+<div class="w-2.5 h-2.5 bg-emerald-900 rounded-full"></div> In Progress
+            </div>
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-gray-500">
+<div class="w-2.5 h-2.5 bg-gray-200 rounded-full"></div> Pending
+            </div>
+</div>
+</div>
+<!-- Time Tracker -->
+<div class="col-span-3 bg-emerald-950 rounded-[32px] p-6 text-white custom-shadow relative overflow-hidden" data-purpose="time-tracker">
+<div class="relative z-10 flex flex-col h-full">
+<h3 class="font-bold text-sm mb-6">Time Tracker</h3>
+<div class="flex-1 flex flex-col items-center justify-center">
+<p class="text-4xl font-mono tracking-widest mb-8">01:24:08</p>
+<div class="flex gap-4">
+<button class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-emerald-950 hover:bg-emerald-100 transition-all">
+<svg class="w-6 h-6" fill="currentColor" viewbox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+</button>
+<button class="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-all">
+<svg class="w-6 h-6" fill="currentColor" viewbox="0 0 24 24"><path d="M6 6h12v12H6z"></path></svg>
+</button>
+</div>
+</div>
+</div>
+<!-- Background Pattern -->
+<div class="absolute inset-0 pointer-events-none opacity-20">
+<svg class="h-full w-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0 100 Q 25 20 50 100 T 100 100" fill="none" stroke="white" stroke-width="2"></path>
+<path d="M0 90 Q 25 10 50 90 T 100 90" fill="none" stroke="white" stroke-width="2"></path>
+<path d="M0 110 Q 25 30 50 110 T 100 110" fill="none" stroke="white" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+</section>
+<!-- END: Bottom Section -->
+</main>
+<!-- END: Main Content Area -->
+</div>
+<!-- END: Main Dashboard Wrapper -->
+</body></html>

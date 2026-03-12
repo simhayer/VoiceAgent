@@ -9,3 +9,4 @@ from langchain_core.messages import BaseMessage
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
     caller_phone: str
+    call_sid: str

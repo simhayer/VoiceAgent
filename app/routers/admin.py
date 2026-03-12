@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.appointment import Appointment
 from app.models.availability import AvailabilityRule
+from app.models.call_log import CallLog, CallMessage
 from app.models.office import OfficeConfig
 from app.models.patient import Patient
 from app.models.provider import Provider
@@ -127,3 +128,43 @@ async def upsert_office_config(key: str, value: str, category: str = "general", 
         db.add(entry)
     await db.commit()
     return {"key": key, "value": value, "category": category}
+
+
+# ── Call Logs ──
+
+@router.get("/call-logs")
+async def list_call_logs(db: AsyncSession = Depends(get_db)):
+    """Return all persisted call sessions with their messages."""
+    import json as _json
+    result = await db.execute(
+        select(CallLog).order_by(CallLog.started_at.desc())
+    )
+    logs = result.scalars().all()
+
+    out = []
+    for log in logs:
+        msgs_result = await db.execute(
+            select(CallMessage)
+            .where(CallMessage.call_log_id == log.id)
+            .order_by(CallMessage.sequence)
+        )
+        msgs = msgs_result.scalars().all()
+        out.append({
+            "call_sid": log.call_sid,
+            "caller_phone": log.caller_phone,
+            "status": log.status,
+            "started_at": log.started_at.isoformat() if log.started_at else None,
+            "ended_at": log.ended_at.isoformat() if log.ended_at else None,
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "timestamp": m.timestamp.isoformat() if m.timestamp else None,
+                    "tool_name": m.tool_name,
+                    "tool_args": _json.loads(m.tool_args) if m.tool_args else None,
+                }
+                for m in msgs
+            ],
+        })
+    return out
