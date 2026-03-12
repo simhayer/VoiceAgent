@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.patient import Patient
 
 
-async def lookup_patient(db: AsyncSession, phone: str) -> dict:
-    result = await db.execute(select(Patient).where(Patient.phone == phone))
+async def lookup_patient(db: AsyncSession, tenant_id: str, phone: str) -> dict:
+    result = await db.execute(
+        select(Patient).where(Patient.tenant_id == tenant_id, Patient.phone == phone)
+    )
     patient = result.scalars().first()
     if not patient:
         return {"found": False, "message": "No patient found with that phone number."}
@@ -23,6 +25,7 @@ async def lookup_patient(db: AsyncSession, phone: str) -> dict:
 
 async def create_patient(
     db: AsyncSession,
+    tenant_id: str,
     first_name: str,
     last_name: str,
     phone: str,
@@ -30,7 +33,9 @@ async def create_patient(
     date_of_birth: str | None = None,
     insurance_provider: str | None = None,
 ) -> dict:
-    result = await db.execute(select(Patient).where(Patient.phone == phone))
+    result = await db.execute(
+        select(Patient).where(Patient.tenant_id == tenant_id, Patient.phone == phone)
+    )
     existing = result.scalars().first()
     if existing:
         return {
@@ -40,6 +45,7 @@ async def create_patient(
         }
 
     patient = Patient(
+        tenant_id=tenant_id,
         first_name=first_name,
         last_name=last_name,
         phone=phone,

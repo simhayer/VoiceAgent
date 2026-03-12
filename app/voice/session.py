@@ -33,6 +33,14 @@ class CallSession:
     # Caller info (populated from Twilio start event)
     caller_phone: str = ""
 
+    # Tenant info (populated from Twilio start event custom parameters)
+    tenant_id: str = ""
+    tenant_name: str = ""
+    tenant_greeting: str = ""
+    tenant_emergency_phone: str | None = None
+    tenant_transfer_phone: str | None = None
+    tenant_office_info: dict | None = None
+
     # Lifecycle
     is_active: bool = True
 

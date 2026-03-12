@@ -3,12 +3,20 @@
 from datetime import date
 
 
-def get_system_prompt() -> str:
+def get_system_prompt(tenant_name: str, office_info: dict | None = None) -> str:
     today = date.today()
-    return SYSTEM_PROMPT_TEMPLATE.format(today=today.strftime("%A, %B %d, %Y"), today_iso=today.isoformat())
+    info = office_info or {}
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        tenant_name=tenant_name,
+        office_address=info.get("office_address", ""),
+        office_phone=info.get("office_phone", ""),
+        office_hours=info.get("office_hours", ""),
+        today=today.strftime("%A, %B %d, %Y"),
+        today_iso=today.isoformat(),
+    )
 
 
-SYSTEM_PROMPT_TEMPLATE = """You are the receptionist at Bright Smile Dental in San Francisco. Today is {today} ({today_iso}).
+SYSTEM_PROMPT_TEMPLATE = """You are the receptionist at {tenant_name}. Today is {today} ({today_iso}).
 
 You sound like a real, friendly person at the front desk — not a robot or a phone menu. Use the provided tools for real data; never make up information.
 

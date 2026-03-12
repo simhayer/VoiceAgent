@@ -12,7 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.prompts import get_system_prompt
 from app.agent.state import AgentState
-from app.agent.tools import ALL_TOOLS, reset_active_db, set_active_db
+from app.agent.tools import (
+    ALL_TOOLS,
+    reset_active_db,
+    reset_active_tenant,
+    reset_tenant_phones,
+    set_active_db,
+    set_active_tenant,
+    set_tenant_phones,
+)
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -33,7 +41,10 @@ llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
 async def agent_node(state: AgentState) -> dict:
     """Call the LLM with conversation history and available tools."""
-    messages = [SystemMessage(content=get_system_prompt())] + state["messages"]
+    tenant_name = state.get("tenant_name", "Our Office")
+    office_info = state.get("office_info")
+    system_prompt = get_system_prompt(tenant_name, office_info)
+    messages = [SystemMessage(content=system_prompt)] + state["messages"]
     response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
@@ -119,6 +130,11 @@ def _build_lc_messages(messages: list[dict]) -> list:
 async def stream_message(
     messages: list[dict],
     caller_phone: str,
+    tenant_id: str,
+    tenant_name: str,
+    office_info: dict | None,
+    emergency_phone: str | None,
+    transfer_phone: str | None,
     db: AsyncSession,
 ) -> AsyncGenerator[tuple[str, str], None]:
     """Stream the agent response as (event_type, data) tuples.
@@ -128,10 +144,15 @@ async def stream_message(
         ("text", sentence_fragment) — buffered text at sentence boundaries
     """
     db_token = set_active_db(db)
+    tenant_token = set_active_tenant(tenant_id)
+    phone_tokens = set_tenant_phones(emergency_phone, transfer_phone)
     try:
         initial_state: AgentState = {
             "messages": _build_lc_messages(messages),
             "caller_phone": caller_phone,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant_name,
+            "office_info": office_info,
         }
 
         buffer = ""
@@ -179,19 +200,31 @@ async def stream_message(
             yield ("text", buffer)
     finally:
         reset_active_db(db_token)
+        reset_active_tenant(tenant_token)
+        reset_tenant_phones(phone_tokens)
 
 
 async def process_message(
     messages: list[dict],
     caller_phone: str,
+    tenant_id: str,
+    tenant_name: str,
+    office_info: dict | None,
+    emergency_phone: str | None,
+    transfer_phone: str | None,
     db: AsyncSession,
 ) -> str:
     """Non-streaming fallback: run the full graph and return the complete response."""
     db_token = set_active_db(db)
+    tenant_token = set_active_tenant(tenant_id)
+    phone_tokens = set_tenant_phones(emergency_phone, transfer_phone)
     try:
         initial_state: AgentState = {
             "messages": _build_lc_messages(messages),
             "caller_phone": caller_phone,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant_name,
+            "office_info": office_info,
         }
 
         result = await agent_graph.ainvoke(initial_state)
@@ -204,3 +237,5 @@ async def process_message(
         return "I'm sorry, I wasn't able to process that. Could you please repeat?"
     finally:
         reset_active_db(db_token)
+        reset_active_tenant(tenant_token)
+        reset_tenant_phones(phone_tokens)

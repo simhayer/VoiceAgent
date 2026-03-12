@@ -12,9 +12,10 @@ from app.services.patient_service import lookup_patient as _lookup_patient
 from app.services.scheduling import book_appointment as _book_appointment
 from app.services.scheduling import get_available_slots as _get_available_slots
 
-# The db session is injected at runtime via the graph's config.
-# Tools receive it from the graph state via a closure.
 _active_db: ContextVar[AsyncSession | None] = ContextVar("active_db", default=None)
+_active_tenant_id: ContextVar[str | None] = ContextVar("active_tenant_id", default=None)
+_active_tenant_emergency_phone: ContextVar[str | None] = ContextVar("active_tenant_emergency_phone", default=None)
+_active_tenant_transfer_phone: ContextVar[str | None] = ContextVar("active_tenant_transfer_phone", default=None)
 
 
 def set_active_db(db: AsyncSession) -> Token:
@@ -25,11 +26,37 @@ def reset_active_db(token: Token):
     _active_db.reset(token)
 
 
+def set_active_tenant(tenant_id: str) -> Token:
+    return _active_tenant_id.set(tenant_id)
+
+
+def reset_active_tenant(token: Token):
+    _active_tenant_id.reset(token)
+
+
+def set_tenant_phones(emergency: str | None, transfer: str | None) -> tuple[Token, Token]:
+    t1 = _active_tenant_emergency_phone.set(emergency)
+    t2 = _active_tenant_transfer_phone.set(transfer)
+    return t1, t2
+
+
+def reset_tenant_phones(tokens: tuple[Token, Token]):
+    _active_tenant_emergency_phone.reset(tokens[0])
+    _active_tenant_transfer_phone.reset(tokens[1])
+
+
 def _get_db() -> AsyncSession:
     db = _active_db.get()
     if db is None:
         raise RuntimeError("No active database session — set_active_db() must be called before running the agent")
     return db
+
+
+def _get_tenant_id() -> str:
+    tid = _active_tenant_id.get()
+    if tid is None:
+        raise RuntimeError("No active tenant — set_active_tenant() must be called before running the agent")
+    return tid
 
 
 @tool
@@ -62,6 +89,7 @@ async def check_availability(
 
     result = await _get_available_slots(
         db=_get_db(),
+        tenant_id=_get_tenant_id(),
         procedure_type=procedure_type,
         date_from=d_from,
         date_to=d_to,
@@ -98,6 +126,7 @@ async def book_appointment(
     start_dt = datetime.fromisoformat(f"{date}T{start_time}")
     result = await _book_appointment(
         db=_get_db(),
+        tenant_id=_get_tenant_id(),
         provider_id=provider_id,
         procedure_type=procedure_type,
         start_time=start_dt,
@@ -116,7 +145,7 @@ async def get_office_info(query: str) -> str:
     Args:
         query: The topic to look up, e.g. 'office hours', 'parking', 'insurance', 'whitening price'.
     """
-    result = await _get_office_info(db=_get_db(), query=query)
+    result = await _get_office_info(db=_get_db(), tenant_id=_get_tenant_id(), query=query)
     return json.dumps(result)
 
 
@@ -127,7 +156,7 @@ async def lookup_patient(phone: str) -> str:
     Args:
         phone: Patient's phone number to look up.
     """
-    result = await _lookup_patient(db=_get_db(), phone=phone)
+    result = await _lookup_patient(db=_get_db(), tenant_id=_get_tenant_id(), phone=phone)
     return json.dumps(result)
 
 
@@ -142,10 +171,11 @@ async def escalate(reason: str, urgency: str = "normal") -> str:
         urgency: How urgent — normal, urgent, or emergency.
     """
     if urgency == "emergency":
+        emergency_phone = _active_tenant_emergency_phone.get() or ""
         return json.dumps({
             "action": "transfer",
             "message": "I'm transferring you to our emergency line right now. Please stay on the line.",
-            "transfer_number": "+14155550911",
+            "transfer_number": emergency_phone,
         })
     return json.dumps({
         "action": "message",

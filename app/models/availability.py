@@ -15,6 +15,7 @@ class AvailabilityRule(Base):
     __tablename__ = "availability_rules"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     provider_id: Mapped[str] = mapped_column(ForeignKey("providers.id"), nullable=False)
     day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
     start_time: Mapped[str] = mapped_column(String(5), nullable=False)

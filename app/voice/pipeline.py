@@ -14,6 +14,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 from app.agent.graph import stream_message
 from app.config import settings
 from app.database import async_session
+from app.services.office_context import get_all_office_info
+from app.services.tenant_service import get_tenant_by_id
 from app.voice.audio import twilio_payload_to_deepgram
 from app.voice.interruption import handle_interruption
 from app.voice.session import CallSession
@@ -22,7 +24,7 @@ from app.voice.tts import CartesiaTTS
 
 logger = logging.getLogger(__name__)
 
-GREETING = "Hi, thank you for calling Bright Smile Dental! How can I help you today?"
+DEFAULT_GREETING = "Hi, thank you for calling! How can I help you today?"
 
 FILLER_PHRASES: dict[str, list[str]] = {
     "check_availability": [
@@ -48,6 +50,24 @@ FILLER_PHRASES: dict[str, list[str]] = {
         "Hang on one sec.",
     ],
 }
+
+
+async def _load_tenant_context(session: CallSession) -> None:
+    """Load tenant details and office config from the database into the session."""
+    async with async_session() as db:
+        tenant = await get_tenant_by_id(db, session.tenant_id)
+        if not tenant:
+            logger.warning("Tenant %s not found during pipeline init", session.tenant_id)
+            session.tenant_name = "Our Office"
+            return
+
+        session.tenant_name = tenant.name
+        session.tenant_greeting = tenant.greeting_message or f"Hi, thank you for calling {tenant.name}! How can I help you today?"
+        session.tenant_emergency_phone = tenant.emergency_phone
+        session.tenant_transfer_phone = tenant.transfer_phone
+
+        office_entries = await get_all_office_info(db, session.tenant_id)
+        session.tenant_office_info = {e["key"]: e["value"] for e in office_entries}
 
 
 async def run_pipeline(websocket: WebSocket):
@@ -129,7 +149,6 @@ async def _receive_loop(
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=timeout)
         except asyncio.TimeoutError:
             if session.is_speaking or (session.active_agent_task and not session.active_agent_task.done()):
-                # Agent is actively responding -- don't treat as idle
                 continue
             if not nudge_sent:
                 logger.info("Inactivity timeout (%ss) — nudging caller call=%s", timeout, session.call_sid)
@@ -161,11 +180,17 @@ async def _receive_loop(
             session.call_sid = start_data.get("callSid", "")
             custom = start_data.get("customParameters", {})
             session.caller_phone = custom.get("callerPhone", "")
+            session.tenant_id = custom.get("tenantId", "")
             logger.info(
-                "Call started: callSid=%s streamSid=%s",
+                "Call started: callSid=%s streamSid=%s tenant=%s",
                 session.call_sid,
                 session.stream_sid,
+                session.tenant_id,
             )
+
+            # Load tenant context (name, greeting, office info) from DB
+            await _load_tenant_context(session)
+
             session.stream_started.set()
 
         elif event == "media":
@@ -193,10 +218,11 @@ async def _send_greeting(session: CallSession, tts: CartesiaTTS):
     if not session.is_active:
         return
 
+    greeting = session.tenant_greeting or DEFAULT_GREETING
     turn_id = session.start_new_turn()
-    completed = await tts.synthesize_and_stream(GREETING, turn_id=turn_id)
+    completed = await tts.synthesize_and_stream(greeting, turn_id=turn_id)
     if completed and not session.is_stale_turn(turn_id):
-        session.messages.append({"role": "assistant", "content": GREETING})
+        session.messages.append({"role": "assistant", "content": greeting})
 
 
 async def _process_and_speak(session: CallSession, tts: CartesiaTTS, user_text: str, turn_id: int):
@@ -220,6 +246,11 @@ async def _process_and_speak(session: CallSession, tts: CartesiaTTS, user_text: 
             async for event_type, data in stream_message(
                 messages=session.messages,
                 caller_phone=session.caller_phone,
+                tenant_id=session.tenant_id,
+                tenant_name=session.tenant_name,
+                office_info=session.tenant_office_info,
+                emergency_phone=session.tenant_emergency_phone,
+                transfer_phone=session.tenant_transfer_phone,
                 db=db,
             ):
                 if not session.is_active or session.is_stale_turn(turn_id):
@@ -315,12 +346,7 @@ def _save_interrupted_context(
     tools_called: list[str],
     tool_results: list[str],
 ) -> None:
-    """Preserve context from an interrupted turn so the LLM doesn't lose track.
-
-    Without this, an interrupted tool call leaves an orphaned user message
-    with no assistant reply, breaking the alternating message pattern and
-    causing the LLM to never retry the tool.
-    """
+    """Preserve context from an interrupted turn so the LLM doesn't lose track."""
     partial_text = "".join(response_parts).strip()
     parts: list[str] = []
 
@@ -347,11 +373,7 @@ def _save_interrupted_context(
 
 
 def _trim_history(session: CallSession) -> None:
-    """Keep conversation history within token-budget-friendly bounds.
-
-    Preserves the first assistant message (greeting context) and the most
-    recent ``max_conversation_messages`` messages.
-    """
+    """Keep conversation history within token-budget-friendly bounds."""
     cap = settings.max_conversation_messages
     if cap <= 0 or len(session.messages) <= cap:
         return

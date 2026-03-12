@@ -5,13 +5,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/postgres"
 
-    # Office
-    office_name: str = "Bright Smile Dental"
-
-    # Twilio
+    # Twilio (master account credentials — shared across all tenants)
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
-    twilio_phone_number: str = ""
 
     # Deepgram
     deepgram_api_key: str = ""
@@ -22,13 +18,18 @@ class Settings(BaseSettings):
     stt_barge_in_min_confidence: float = 0.45
     stt_barge_in_promotion_debounce_ms: int = 700
 
-    # Cartesia
+    # Cartesia (default; tenants can override voice_id)
     cartesia_api_key: str = ""
     cartesia_voice_id: str = "694f9389-aac1-45b6-b726-9d9369183238"
     cartesia_speed: str = "normal"
 
     # OpenAI
     openai_api_key: str = ""
+
+    # JWT
+    jwt_secret_key: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480
 
     # Server
     server_url: str = "http://localhost:8000"
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
     max_conversation_messages: int = 20
     call_inactivity_timeout_s: int = 30
 
-    model_config = {"env_file": ".env"}
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

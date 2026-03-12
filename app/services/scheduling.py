@@ -12,6 +12,7 @@ from app.services.cache import get_providers, get_rules
 
 async def get_available_slots(
     db: AsyncSession,
+    tenant_id: str,
     procedure_type: str,
     date_from: date,
     date_to: date,
@@ -19,21 +20,18 @@ async def get_available_slots(
     time_of_day: str | None = None,
     limit: int = 5,
 ) -> dict:
-    """Find open appointment slots across all (or one) providers.
-
-    Uses a single batch query for existing appointments instead of
-    per-slot conflict checks (avoids N+1 queries).
-    """
+    """Find open appointment slots across all (or one) providers for a tenant."""
     duration = PROCEDURE_DURATIONS.get(procedure_type, 30)
     slot_increment = 30
 
-    providers = get_providers(provider_id)
+    providers = get_providers(tenant_id, provider_id)
     provider_ids = [p.id for p in providers]
-    all_rules = get_rules(provider_ids)
+    all_rules = get_rules(tenant_id, provider_ids)
 
     date_from_dt = datetime.combine(date_from, time.min)
     date_to_dt = datetime.combine(date_to, time.max)
     appt_stmt = select(Appointment).where(
+        Appointment.tenant_id == tenant_id,
         Appointment.provider_id.in_(provider_ids),
         Appointment.start_time <= date_to_dt,
         Appointment.end_time >= date_from_dt,
@@ -88,6 +86,7 @@ async def get_available_slots(
 
 async def book_appointment(
     db: AsyncSession,
+    tenant_id: str,
     provider_id: str,
     procedure_type: str,
     start_time: datetime,
@@ -100,6 +99,7 @@ async def book_appointment(
     end_time = start_time + timedelta(minutes=duration)
 
     conflict_stmt = select(Appointment).where(
+        Appointment.tenant_id == tenant_id,
         Appointment.provider_id == provider_id,
         Appointment.status != "cancelled",
         and_(Appointment.start_time < end_time, Appointment.end_time > start_time),
@@ -108,12 +108,15 @@ async def book_appointment(
     if result.scalars().first():
         return {"success": False, "error": "This time slot is no longer available."}
 
-    prov_result = await db.execute(select(Provider).where(Provider.id == provider_id))
+    prov_result = await db.execute(
+        select(Provider).where(Provider.id == provider_id, Provider.tenant_id == tenant_id)
+    )
     provider = prov_result.scalars().first()
     if not provider:
         return {"success": False, "error": f"Provider {provider_id} not found."}
 
     appointment = Appointment(
+        tenant_id=tenant_id,
         provider_id=provider_id,
         patient_id=patient_id,
         start_time=start_time,
@@ -140,8 +143,10 @@ async def book_appointment(
     }
 
 
-async def cancel_appointment(db: AsyncSession, appointment_id: str) -> dict:
-    result = await db.execute(select(Appointment).where(Appointment.id == appointment_id))
+async def cancel_appointment(db: AsyncSession, tenant_id: str, appointment_id: str) -> dict:
+    result = await db.execute(
+        select(Appointment).where(Appointment.id == appointment_id, Appointment.tenant_id == tenant_id)
+    )
     appointment = result.scalars().first()
     if not appointment:
         return {"success": False, "error": "Appointment not found."}

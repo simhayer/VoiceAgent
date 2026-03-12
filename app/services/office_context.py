@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.office import OfficeConfig
 
 
-async def get_office_info(db: AsyncSession, query: str) -> dict:
+async def get_office_info(db: AsyncSession, tenant_id: str, query: str) -> dict:
     """Search office config for information matching the caller's question."""
-    result = await db.execute(select(OfficeConfig))
+    result = await db.execute(select(OfficeConfig).where(OfficeConfig.tenant_id == tenant_id))
     all_config = list(result.scalars().all())
 
     query_lower = query.lower()
@@ -31,8 +31,8 @@ async def get_office_info(db: AsyncSession, query: str) -> dict:
     return {"found": True, "results": matches}
 
 
-async def get_all_office_info(db: AsyncSession) -> list[dict]:
-    result = await db.execute(select(OfficeConfig))
+async def get_all_office_info(db: AsyncSession, tenant_id: str) -> list[dict]:
+    result = await db.execute(select(OfficeConfig).where(OfficeConfig.tenant_id == tenant_id))
     entries = list(result.scalars().all())
     return [{"key": e.key, "value": e.value, "category": e.category} for e in entries]
 
