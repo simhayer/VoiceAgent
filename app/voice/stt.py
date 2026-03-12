@@ -34,6 +34,7 @@ class DeepgramSTT:
         self._barge_in_active: bool = False
         self._barge_in_dispatched: bool = False
         self._reconnecting: bool = False
+        self._early_utterance_task: asyncio.Task | None = None
 
     async def connect(self):
         client = AsyncDeepgramClient(api_key=settings.deepgram_api_key)
@@ -73,6 +74,7 @@ class DeepgramSTT:
             await self._socket.send_media(audio_bytes)
 
     async def close(self):
+        self._cancel_early_utterance_timer()
         if self._socket:
             try:
                 await self._socket.send_close_stream()
@@ -114,6 +116,7 @@ class DeepgramSTT:
             if result.is_final:
                 self._final_transcript_parts.append(transcript)
                 logger.debug("Deepgram final: %s", transcript)
+                self._schedule_early_utterance()
             else:
                 logger.debug("Deepgram interim: %s", transcript)
         except (IndexError, AttributeError):
@@ -121,9 +124,11 @@ class DeepgramSTT:
 
     async def _handle_speech_started(self):
         logger.debug("Deepgram speech started")
+        self._cancel_early_utterance_timer()
         if self.session.is_speaking:
             self._barge_in_active = True
             self.session.mark_provisional_speech()
+            await self.session.clear_twilio_audio()
             logger.info(
                 "speech_started_provisional call=%s turn=%s",
                 self.session.call_sid,
@@ -131,30 +136,50 @@ class DeepgramSTT:
             )
 
     async def _handle_utterance_end(self):
+        self._cancel_early_utterance_timer()
         if self._final_transcript_parts:
-            full_utterance = " ".join(self._final_transcript_parts).strip()
-            self._final_transcript_parts.clear()
-
-            # If they just said "wait" to pause the agent, swallow it
-            word_count = len(full_utterance.split())
-            if self._barge_in_active and word_count <= 3 and any(w in full_utterance.lower() for w in ["wait", "stop", "hold"]):
-                logger.info("Swallowed short interrupt: %s", full_utterance)
-                self._barge_in_active = False
-                self._barge_in_dispatched = False
-                self.session.clear_provisional_speech()
-                return
-
-            self._barge_in_active = False
-            self._barge_in_dispatched = False
-            self.session.clear_provisional_speech()
-            logger.info("Utterance complete: %s", full_utterance)
-            self.session.finalize_utterance(full_utterance)
-            if self.on_utterance:
-                await self.on_utterance(full_utterance)
+            await self._flush_utterance(source="utterance_end")
         else:
             self._barge_in_active = False
             self._barge_in_dispatched = False
             self.session.clear_provisional_speech()
+
+    async def _flush_utterance(self, source: str = "early"):
+        """Flush accumulated final transcript parts as a complete utterance."""
+        if not self._final_transcript_parts:
+            return
+        full_utterance = " ".join(self._final_transcript_parts).strip()
+        self._final_transcript_parts.clear()
+        self._barge_in_active = False
+        self._barge_in_dispatched = False
+        self.session.clear_provisional_speech()
+        if not full_utterance:
+            return
+        logger.info("Utterance complete (%s): %s", source, full_utterance)
+        self.session.finalize_utterance(full_utterance)
+        if self.on_utterance:
+            await self.on_utterance(full_utterance)
+
+    def _schedule_early_utterance(self):
+        """Start a short timer to flush the utterance without waiting for utterance_end."""
+        self._cancel_early_utterance_timer()
+        delay = max(0, settings.stt_early_utterance_delay_ms) / 1000
+        if delay > 0:
+            self._early_utterance_task = asyncio.create_task(
+                self._early_utterance_timer(delay)
+            )
+
+    async def _early_utterance_timer(self, delay: float):
+        try:
+            await asyncio.sleep(delay)
+            await self._flush_utterance(source="early_timer")
+        except asyncio.CancelledError:
+            pass
+
+    def _cancel_early_utterance_timer(self):
+        if self._early_utterance_task and not self._early_utterance_task.done():
+            self._early_utterance_task.cancel()
+        self._early_utterance_task = None
 
     async def _on_error(self, error):
         logger.error("Deepgram error: %s", error)

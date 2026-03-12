@@ -14,7 +14,7 @@ import time
 from cartesia import AsyncCartesia
 
 from app.config import settings
-from app.voice.audio import cartesia_pcm_to_twilio
+from app.voice.audio import encode_twilio_payload
 from app.voice.session import CallSession
 
 logger = logging.getLogger(__name__)
@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 MODEL_ID = "sonic-2"
 OUTPUT_FORMAT = {
     "container": "raw",
-    "encoding": "pcm_s16le",
-    "sample_rate": 24000,
+    "encoding": "pcm_mulaw",
+    "sample_rate": 8000,
 }
 VOICE_SPEC = {"mode": "id", "id": settings.cartesia_voice_id}
 SPEED = settings.cartesia_speed
@@ -84,7 +84,7 @@ class CartesiaTTS:
                     break
                 if chunk.audio:
                     self._log_tts_first_audio_if_needed(target_turn)
-                    mulaw_b64 = cartesia_pcm_to_twilio(chunk.audio, from_rate=24000)
+                    mulaw_b64 = encode_twilio_payload(chunk.audio)
                     await self.session.send_audio_to_twilio(mulaw_b64)
 
         except asyncio.CancelledError:
@@ -152,7 +152,7 @@ class CartesiaTTS:
                 audio = getattr(event, "audio", None)
                 if audio:
                     self._log_tts_first_audio_if_needed(turn_id)
-                    mulaw_b64 = cartesia_pcm_to_twilio(audio, from_rate=24000)
+                    mulaw_b64 = encode_twilio_payload(audio)
                     await self.session.send_audio_to_twilio(mulaw_b64)
         except asyncio.CancelledError:
             logger.debug("Context drain cancelled")

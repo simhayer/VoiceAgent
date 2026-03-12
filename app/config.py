@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     stt_barge_in_min_chars: int = 3
     stt_barge_in_min_words: int = 1
     stt_barge_in_min_confidence: float = 0.45
-    stt_barge_in_promotion_debounce_ms: int = 700
+    stt_barge_in_promotion_debounce_ms: int = 300
+    stt_early_utterance_delay_ms: int = 400
 
     # Cartesia (default; tenants can override voice_id)
     cartesia_api_key: str = ""
