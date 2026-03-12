@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Cartesia (default; tenants can override voice_id)
     cartesia_api_key: str = ""
-    cartesia_voice_id: str = "694f9389-aac1-45b6-b726-9d9369183238"
+    cartesia_voice_id: str = ""
     cartesia_speed: str = "normal"
 
     # OpenAI
@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     agent_stream_flush_ms: int = 180
     max_conversation_messages: int = 20
     call_inactivity_timeout_s: int = 30
+
+    # Redis (for dashboard pub/sub)
+    redis_url: str = "redis://localhost:6379"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

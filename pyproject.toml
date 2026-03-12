@@ -38,10 +38,17 @@ langgraph = ">=0.4.0"
 langchain-openai = ">=0.3.0"
 openai = ">=1.0.0"
 greenlet = "^3.3.2"
-psycopg2-binary = "^2.9.11"
+
+# Auth
 pyjwt = ">=2.0.0"
 passlib = {version = ">=1.7.0", extras = ["bcrypt"]}
+
+# Dashboard / pub-sub
+redis = "^7.3.0"
+
+# Misc
 python-multipart = ">=0.0.9"
+psycopg2-binary = "^2.9.11"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0"

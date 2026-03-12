@@ -22,6 +22,8 @@ from app.agent.tools import (
     set_tenant_phones,
 )
 from app.config import settings
+from app.services.call_log_service import persist_message
+from app.services.pubsub import publish_event
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,7 @@ async def agent_node(state: AgentState) -> dict:
 async def tool_node(state: AgentState) -> dict:
     """Execute any tool calls from the last AI message."""
     last_message: AIMessage = state["messages"][-1]
+    call_sid = state.get("call_sid", "")
     tool_results = []
 
     tool_map = {t.name: t for t in ALL_TOOLS}
@@ -59,13 +62,20 @@ async def tool_node(state: AgentState) -> dict:
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
         tool_args = tool_call["args"]
+        tool_call_id = tool_call["id"]
         logger.info("Executing tool: %s(%s)", tool_name, tool_args)
+
+        await publish_event("tool_start", call_sid, tool_name=tool_name, tool_args=tool_args, tool_call_id=tool_call_id)
+        await persist_message(call_sid, "tool_start", f"Using tool: {tool_name}", tool_name=tool_name, tool_args=tool_args)
 
         tool_fn = tool_map.get(tool_name)
         if tool_fn:
             result = await tool_fn.ainvoke(tool_args)
         else:
             result = f'{{"error": "Unknown tool: {tool_name}"}}'
+
+        await publish_event("tool_end", call_sid, tool_name=tool_name, tool_call_id=tool_call_id)
+        await persist_message(call_sid, "tool_end", f"Used tool: {tool_name}", tool_name=tool_name)
 
         tool_results.append(
             ToolMessage(content=str(result), tool_call_id=tool_call["id"])
@@ -130,6 +140,7 @@ def _build_lc_messages(messages: list[dict]) -> list:
 async def stream_message(
     messages: list[dict],
     caller_phone: str,
+    call_sid: str,
     tenant_id: str,
     tenant_name: str,
     office_info: dict | None,
@@ -150,6 +161,7 @@ async def stream_message(
         initial_state: AgentState = {
             "messages": _build_lc_messages(messages),
             "caller_phone": caller_phone,
+            "call_sid": call_sid,
             "tenant_id": tenant_id,
             "tenant_name": tenant_name,
             "office_info": office_info,
@@ -207,6 +219,7 @@ async def stream_message(
 async def process_message(
     messages: list[dict],
     caller_phone: str,
+    call_sid: str,
     tenant_id: str,
     tenant_name: str,
     office_info: dict | None,
@@ -222,6 +235,7 @@ async def process_message(
         initial_state: AgentState = {
             "messages": _build_lc_messages(messages),
             "caller_phone": caller_phone,
+            "call_sid": call_sid,
             "tenant_id": tenant_id,
             "tenant_name": tenant_name,
             "office_info": office_info,

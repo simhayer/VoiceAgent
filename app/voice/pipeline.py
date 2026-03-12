@@ -14,7 +14,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 from app.agent.graph import stream_message
 from app.config import settings
 from app.database import async_session
+from app.services.call_log_service import persist_call_ended, persist_call_started, persist_message
 from app.services.office_context import get_all_office_info
+from app.services.pubsub import publish_event
 from app.services.tenant_service import get_tenant_by_id
 from app.voice.audio import twilio_payload_to_deepgram
 from app.voice.interruption import handle_interruption
@@ -82,6 +84,9 @@ async def run_pipeline(websocket: WebSocket):
         if not transcript.strip() or not session.is_active:
             return
 
+        await publish_event("user_transcript", session.call_sid, text=transcript)
+        await persist_message(session.call_sid, "user", transcript)
+
         if session.active_agent_task and not session.active_agent_task.done():
             await handle_interruption(session, tts, source="new_utterance", transcript_hint=transcript)
 
@@ -131,6 +136,9 @@ async def run_pipeline(websocket: WebSocket):
             session.active_agent_task.cancel()
         await stt.close()
         await tts.close()
+        if session.call_sid:
+            await publish_event("call_ended", session.call_sid)
+            await persist_call_ended(session.call_sid)
         logger.info("Pipeline cleaned up for call %s", session.call_sid)
 
 
@@ -188,8 +196,16 @@ async def _receive_loop(
                 session.tenant_id,
             )
 
+            await publish_event("call_started", session.call_sid, caller_phone=session.caller_phone)
+            await persist_call_started(session.call_sid, session.caller_phone)
+
             # Load tenant context (name, greeting, office info) from DB
             await _load_tenant_context(session)
+
+            # Log the greeting to dashboard now that we have call_sid
+            greeting = session.tenant_greeting or DEFAULT_GREETING
+            await publish_event("agent_transcript", session.call_sid, text=greeting)
+            await persist_message(session.call_sid, "assistant", greeting)
 
             session.stream_started.set()
 
@@ -246,6 +262,7 @@ async def _process_and_speak(session: CallSession, tts: CartesiaTTS, user_text: 
             async for event_type, data in stream_message(
                 messages=session.messages,
                 caller_phone=session.caller_phone,
+                call_sid=session.call_sid,
                 tenant_id=session.tenant_id,
                 tenant_name=session.tenant_name,
                 office_info=session.tenant_office_info,
@@ -330,6 +347,8 @@ async def _process_and_speak(session: CallSession, tts: CartesiaTTS, user_text: 
     response_text = "".join(full_response_parts).strip()
     if response_text:
         session.messages.append({"role": "assistant", "content": response_text})
+        await publish_event("agent_transcript", session.call_sid, text=response_text)
+        await persist_message(session.call_sid, "assistant", response_text)
     elif not filler_sent:
         fallback = "I'm sorry, could you repeat that?"
         session.messages.append({"role": "assistant", "content": fallback})

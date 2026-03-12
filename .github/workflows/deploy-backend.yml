@@ -1,0 +1,77 @@
+name: Deploy Backend to AWS App Runner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - "Dockerfile"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: voice-agent-backend
+  APP_RUNNER_SERVICE: voice-agent-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy to App Runner
+        id: deploy
+        uses: awslabs/amazon-app-runner-deploy@main
+        with:
+          service: ${{ env.APP_RUNNER_SERVICE }}
+          image: ${{ steps.build-image.outputs.image }}
+          access-role-arn: ${{ secrets.APP_RUNNER_ECR_ROLE_ARN }}
+          region: ${{ env.AWS_REGION }}
+          port: 8000
+          cpu: 1
+          memory: 2
+          wait-for-service-stability-seconds: 120
+          copy-env-vars: |
+            DATABASE_URL
+            REDIS_URL
+            SERVER_URL
+            OFFICE_NAME
+            TWILIO_ACCOUNT_SID
+            TWILIO_AUTH_TOKEN
+            TWILIO_PHONE_NUMBER
+            DEEPGRAM_API_KEY
+            CARTESIA_API_KEY
+            OPENAI_API_KEY
+
+      - name: Output App Runner URL
+        run: echo "App Runner URL -> ${{ steps.deploy.outputs.service-url }}"

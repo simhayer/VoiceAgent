@@ -23,9 +23,9 @@ async def incoming_call(request: Request, db: AsyncSession = Depends(get_db)):
     Resolves the tenant from the called (To) number and passes tenant_id
     as a custom parameter into the WebSocket stream.
     """
-    form = await request.form()
-    called_number = form.get("To", "")
-    caller_phone = form.get("From", "")
+    form_data = await request.form()
+    called_number = form_data.get("To", "")
+    caller_phone = form_data.get("From", "Unknown")
 
     tenant = await resolve_tenant_by_phone(db, called_number)
     if not tenant:

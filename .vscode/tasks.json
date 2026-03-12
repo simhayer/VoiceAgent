@@ -1,0 +1,32 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Dashboard",
+			"type": "shell",
+			"command": "cd /Users/mohammadfarhanali/Desktop/VoiceAi/VoiceAgent/dashboard && rm -rf node_modules/.tmp && npm run build",
+			"group": "build"
+		},
+		{
+			"label": "Build Dashboard 2",
+			"type": "shell",
+			"command": "cd /Users/mohammadfarhanali/Desktop/VoiceAi/VoiceAgent/dashboard && rm -rf node_modules/.tmp && npm run build",
+			"group": "build"
+		},
+		{
+			"label": "Check file sizes",
+			"type": "shell",
+			"command": "wc -l /Users/mohammadfarhanali/Desktop/VoiceAi/VoiceAgent/dashboard/src/components/*.tsx"
+		},
+		{
+			"label": "Check file sizes 2",
+			"type": "shell",
+			"command": "wc -l /Users/mohammadfarhanali/Desktop/VoiceAi/VoiceAgent/dashboard/src/components/*.tsx"
+		},
+		{
+			"label": "Build Dashboard Final",
+			"type": "shell",
+			"command": "cd /Users/mohammadfarhanali/Desktop/VoiceAi/VoiceAgent/dashboard && rm -rf node_modules/.tmp && npm run build"
+		}
+	]
+}

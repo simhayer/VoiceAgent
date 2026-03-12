@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+*.pyo
+.git
+.github
+.env
+.env.*
+!.env.example
+.vscode
+dashboard/
+node_modules/
+*.db
+*.sqlite3
+.ruff_cache
+.pytest_cache
+README.md
