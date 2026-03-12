@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     # Cartesia
     cartesia_api_key: str = ""
+    cartesia_voice_id: str = ""
+    cartesia_speed: str = "normal"
 
     # OpenAI
     openai_api_key: str = ""
