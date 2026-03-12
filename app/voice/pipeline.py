@@ -84,8 +84,8 @@ async def run_pipeline(websocket: WebSocket):
         if not transcript.strip() or not session.is_active:
             return
 
-        await publish_event("user_transcript", session.call_sid, text=transcript)
-        await persist_message(session.call_sid, "user", transcript)
+        asyncio.create_task(publish_event("user_transcript", session.call_sid, text=transcript))
+        asyncio.create_task(persist_message(session.call_sid, "user", transcript))
 
         if session.active_agent_task and not session.active_agent_task.done():
             await handle_interruption(session, tts, source="new_utterance", transcript_hint=transcript)
@@ -196,16 +196,14 @@ async def _receive_loop(
                 session.tenant_id,
             )
 
-            await publish_event("call_started", session.call_sid, caller_phone=session.caller_phone)
-            await persist_call_started(session.call_sid, session.caller_phone)
+            asyncio.create_task(publish_event("call_started", session.call_sid, caller_phone=session.caller_phone))
+            asyncio.create_task(persist_call_started(session.call_sid, session.caller_phone))
 
-            # Load tenant context (name, greeting, office info) from DB
             await _load_tenant_context(session)
 
-            # Log the greeting to dashboard now that we have call_sid
             greeting = session.tenant_greeting or DEFAULT_GREETING
-            await publish_event("agent_transcript", session.call_sid, text=greeting)
-            await persist_message(session.call_sid, "assistant", greeting)
+            asyncio.create_task(publish_event("agent_transcript", session.call_sid, text=greeting))
+            asyncio.create_task(persist_message(session.call_sid, "assistant", greeting))
 
             session.stream_started.set()
 
@@ -347,8 +345,8 @@ async def _process_and_speak(session: CallSession, tts: CartesiaTTS, user_text: 
     response_text = "".join(full_response_parts).strip()
     if response_text:
         session.messages.append({"role": "assistant", "content": response_text})
-        await publish_event("agent_transcript", session.call_sid, text=response_text)
-        await persist_message(session.call_sid, "assistant", response_text)
+        asyncio.create_task(publish_event("agent_transcript", session.call_sid, text=response_text))
+        asyncio.create_task(persist_message(session.call_sid, "assistant", response_text))
     elif not filler_sent:
         fallback = "I'm sorry, could you repeat that?"
         session.messages.append({"role": "assistant", "content": fallback})

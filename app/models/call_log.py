@@ -17,9 +17,9 @@ class CallLog(Base):
     caller_phone: Mapped[str] = mapped_column(String(20), nullable=False, default="Unknown")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     started_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     messages: Mapped[list["CallMessage"]] = relationship(
         "CallMessage", back_populates="call_log", order_by="CallMessage.sequence",
@@ -38,7 +38,7 @@ class CallMessage(Base):
     tool_args: Mapped[str | None] = mapped_column(Text, nullable=True)     # JSON-encoded
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)         # ordering
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
     call_log: Mapped["CallLog"] = relationship("CallLog", back_populates="messages")

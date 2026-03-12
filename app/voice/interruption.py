@@ -34,6 +34,7 @@ async def handle_interruption(
         try:
             # Bump turn id first so stale producers naturally no-op.
             new_turn = session.start_new_turn()
+            session.speech_mute_active = False
             session.mark_hard_interrupt_promoted()
             session.clear_provisional_speech()
 

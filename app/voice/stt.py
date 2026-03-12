@@ -2,8 +2,11 @@
 
 import asyncio
 import logging
+import re
 import time
 from typing import Awaitable, Callable
+
+_REPEATED_SPEECH_THRESHOLD_S = 0.5
 
 from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
@@ -35,6 +38,8 @@ class DeepgramSTT:
         self._barge_in_dispatched: bool = False
         self._reconnecting: bool = False
         self._early_utterance_task: asyncio.Task | None = None
+        self._speech_mute_task: asyncio.Task | None = None
+        self._last_speech_started_at: float | None = None
 
     async def connect(self):
         client = AsyncDeepgramClient(api_key=settings.deepgram_api_key)
@@ -75,6 +80,7 @@ class DeepgramSTT:
 
     async def close(self):
         self._cancel_early_utterance_timer()
+        self._cancel_speech_mute_timer()
         if self._socket:
             try:
                 await self._socket.send_close_stream()
@@ -124,24 +130,48 @@ class DeepgramSTT:
 
     async def _handle_speech_started(self):
         logger.debug("Deepgram speech started")
-        self._cancel_early_utterance_timer()
+        if self._final_transcript_parts:
+            self._cancel_early_utterance_timer()
         if self.session.is_speaking:
+            now = time.monotonic()
+            if (
+                self._barge_in_active
+                and not self._barge_in_dispatched
+                and self._last_speech_started_at is not None
+                and (now - self._last_speech_started_at) >= _REPEATED_SPEECH_THRESHOLD_S
+            ):
+                logger.info(
+                    "speech_repeated_auto_promote call=%s turn=%s",
+                    self.session.call_sid,
+                    self.session.turn_id,
+                )
+                await self._promote_barge_in_to_hard("(repeated speech)", source="speech_repeated")
+                return
             self._barge_in_active = True
+            self._last_speech_started_at = now
             self.session.mark_provisional_speech()
+            self.session.speech_mute_active = True
             await self.session.clear_twilio_audio()
+            self._start_speech_mute_timer()
             logger.info(
-                "speech_started_provisional call=%s turn=%s",
+                "speech_started_mute call=%s turn=%s",
                 self.session.call_sid,
                 self.session.turn_id,
             )
 
     async def _handle_utterance_end(self):
-        self._cancel_early_utterance_timer()
         if self._final_transcript_parts:
+            self._cancel_early_utterance_timer()
+            text = " ".join(self._final_transcript_parts).strip()
+            if text and self._CONTINUATION_RE.search(text):
+                logger.debug("utterance_end deferred — text ends with continuation: %s", text[-30:])
+                self._schedule_early_utterance()
+                return
             await self._flush_utterance(source="utterance_end")
         else:
             self._barge_in_active = False
             self._barge_in_dispatched = False
+            self._last_speech_started_at = None
             self.session.clear_provisional_speech()
 
     async def _flush_utterance(self, source: str = "early"):
@@ -152,6 +182,7 @@ class DeepgramSTT:
         self._final_transcript_parts.clear()
         self._barge_in_active = False
         self._barge_in_dispatched = False
+        self._last_speech_started_at = None
         self.session.clear_provisional_speech()
         if not full_utterance:
             return
@@ -169,17 +200,49 @@ class DeepgramSTT:
                 self._early_utterance_timer(delay)
             )
 
+    _CONTINUATION_RE = re.compile(
+        r"(?:[,;:\-—–]\s*$"
+        r"|\b(?:and|but|or|so|because|then|if|that|which|while|when|as|nor|yet)\s*$)",
+        re.IGNORECASE,
+    )
+
     async def _early_utterance_timer(self, delay: float):
         try:
             await asyncio.sleep(delay)
+            text = " ".join(self._final_transcript_parts).strip()
+            if text and self._CONTINUATION_RE.search(text):
+                logger.debug("Early timer deferred — text ends with continuation: %s", text[-20:])
+                return
             await self._flush_utterance(source="early_timer")
         except asyncio.CancelledError:
             pass
+        except Exception:
+            logger.exception("Early utterance timer failed")
 
     def _cancel_early_utterance_timer(self):
         if self._early_utterance_task and not self._early_utterance_task.done():
             self._early_utterance_task.cancel()
         self._early_utterance_task = None
+
+    def _start_speech_mute_timer(self):
+        """Unmute after a short window if no barge-in confirms real speech."""
+        if self._speech_mute_task and not self._speech_mute_task.done():
+            self._speech_mute_task.cancel()
+        self._speech_mute_task = asyncio.create_task(self._speech_mute_expiry())
+
+    async def _speech_mute_expiry(self):
+        try:
+            await asyncio.sleep(0.5)
+            if not self._barge_in_dispatched:
+                self.session.speech_mute_active = False
+                logger.debug("Speech mute expired (no barge-in), resuming audio")
+        except asyncio.CancelledError:
+            pass
+
+    def _cancel_speech_mute_timer(self):
+        if self._speech_mute_task and not self._speech_mute_task.done():
+            self._speech_mute_task.cancel()
+        self._speech_mute_task = None
 
     async def _on_error(self, error):
         logger.error("Deepgram error: %s", error)
@@ -240,6 +303,7 @@ class DeepgramSTT:
     async def _promote_barge_in_to_hard(self, transcript_hint: str, source: str):
         if self._barge_in_dispatched:
             return
+        self._cancel_speech_mute_timer()
 
         debounce_seconds = max(0, settings.stt_barge_in_promotion_debounce_ms) / 1000
         now = time.monotonic()

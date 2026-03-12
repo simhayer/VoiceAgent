@@ -55,6 +55,9 @@ class CallSession:
     interruption_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     interrupt_in_progress: bool = False
 
+    # Speech mute — temporarily suppress outgoing audio on speech_started
+    speech_mute_active: bool = False
+
     # Timing / observability
     last_activity_at: float = field(default_factory=time.monotonic)
     turn_started_at: float | None = None
@@ -112,6 +115,7 @@ class CallSession:
         self.is_speaking = False
         self.active_tts_turn_id = None
         self.current_tts_context_id = None
+        self.speech_mute_active = False
 
     def should_play_tts_for_turn(self, turn_id: int) -> bool:
         return self.is_speaking and self.active_tts_turn_id == turn_id and not self.is_stale_turn(turn_id)
@@ -143,7 +147,7 @@ class CallSession:
 
     async def send_audio_to_twilio(self, mulaw_base64: str):
         """Send an audio chunk back to the caller via Twilio's WebSocket."""
-        if not self.twilio_ws or not self.is_active:
+        if not self.twilio_ws or not self.is_active or self.speech_mute_active:
             return
         try:
             await self.twilio_ws.send_json({
