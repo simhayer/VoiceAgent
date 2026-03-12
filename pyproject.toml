@@ -16,7 +16,7 @@ uvicorn = {extras = ["standard"], version = ">=0.34.0"}
 # Database
 sqlalchemy = {extras = ["asyncio"], version = ">=2.0.0"}
 alembic = ">=1.14.0"
-aiosqlite = ">=0.20.0"
+asyncpg = ">=0.30.0"
 
 # Validation & config
 pydantic = ">=2.0.0"
@@ -38,9 +38,17 @@ langgraph = ">=0.4.0"
 langchain-openai = ">=0.3.0"
 openai = ">=1.0.0"
 greenlet = "^3.3.2"
+
+# Auth
+pyjwt = ">=2.0.0"
+passlib = {version = ">=1.7.0", extras = ["bcrypt"]}
+
+# Dashboard / pub-sub
 redis = "^7.3.0"
-python-multipart = "^0.0.22"
-asyncpg = "^0.31.0"
+
+# Misc
+python-multipart = ">=0.0.9"
+psycopg2-binary = "^2.9.11"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0"

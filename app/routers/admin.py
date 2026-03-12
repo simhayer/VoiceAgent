@@ -1,11 +1,14 @@
-"""Admin REST API for managing the dental office data."""
+"""Admin REST API for managing dental office data, scoped by tenant."""
 
+import json as _json
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.auth import get_current_tenant_id
 from app.database import get_db
 from app.models.appointment import Appointment
 from app.models.availability import AvailabilityRule
@@ -15,14 +18,18 @@ from app.models.patient import Patient
 from app.models.provider import Provider
 from app.schemas.appointment import AppointmentOut
 from app.schemas.patient import PatientCreate, PatientOut
+from app.services import cache as ref_cache
 from app.services.scheduling import cancel_appointment
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/providers")
-async def list_providers(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Provider))
+async def list_providers(
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    result = await db.execute(select(Provider).where(Provider.tenant_id == tenant_id))
     providers = result.scalars().all()
     return [
         {"id": p.id, "name": p.name, "title": p.title, "specialties": p.specialties}
@@ -31,13 +38,22 @@ async def list_providers(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/providers/{provider_id}")
-async def get_provider(provider_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Provider).where(Provider.id == provider_id))
+async def get_provider(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    result = await db.execute(
+        select(Provider).where(Provider.id == provider_id, Provider.tenant_id == tenant_id)
+    )
     provider = result.scalars().first()
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
     rules_result = await db.execute(
-        select(AvailabilityRule).where(AvailabilityRule.provider_id == provider_id)
+        select(AvailabilityRule).where(
+            AvailabilityRule.provider_id == provider_id,
+            AvailabilityRule.tenant_id == tenant_id,
+        )
     )
     rules = rules_result.scalars().all()
     return {
@@ -58,8 +74,13 @@ async def list_appointments(
     date_from: date | None = None,
     date_to: date | None = None,
     db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
 ):
-    stmt = select(Appointment)
+    stmt = (
+        select(Appointment)
+        .options(selectinload(Appointment.provider))
+        .where(Appointment.tenant_id == tenant_id)
+    )
     if status:
         stmt = stmt.where(Appointment.status == status)
     if date_from:
@@ -72,34 +93,45 @@ async def list_appointments(
 
     results = []
     for a in appointments:
-        prov_result = await db.execute(select(Provider).where(Provider.id == a.provider_id))
-        provider = prov_result.scalars().first()
         out = AppointmentOut.model_validate(a)
-        out.provider_name = provider.name if provider else None
+        out.provider_name = a.provider.name if a.provider else None
         results.append(out)
     return results
 
 
 @router.post("/appointments/{appointment_id}/cancel")
-async def cancel(appointment_id: str, db: AsyncSession = Depends(get_db)):
-    result = await cancel_appointment(db, appointment_id)
+async def cancel(
+    appointment_id: str,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    result = await cancel_appointment(db, tenant_id, appointment_id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
 
 
 @router.get("/patients", response_model=list[PatientOut])
-async def list_patients(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Patient))
+async def list_patients(
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    result = await db.execute(select(Patient).where(Patient.tenant_id == tenant_id))
     return list(result.scalars().all())
 
 
 @router.post("/patients", response_model=PatientOut)
-async def create_patient(data: PatientCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Patient).where(Patient.phone == data.phone))
+async def create_patient(
+    data: PatientCreate,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    result = await db.execute(
+        select(Patient).where(Patient.tenant_id == tenant_id, Patient.phone == data.phone)
+    )
     if result.scalars().first():
         raise HTTPException(status_code=409, detail="Patient with this phone already exists")
-    patient = Patient(**data.model_dump())
+    patient = Patient(tenant_id=tenant_id, **data.model_dump())
     db.add(patient)
     await db.commit()
     await db.refresh(patient)
@@ -107,8 +139,12 @@ async def create_patient(data: PatientCreate, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/office-config")
-async def list_office_config(category: str | None = None, db: AsyncSession = Depends(get_db)):
-    stmt = select(OfficeConfig)
+async def list_office_config(
+    category: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    stmt = select(OfficeConfig).where(OfficeConfig.tenant_id == tenant_id)
     if category:
         stmt = stmt.where(OfficeConfig.category == category)
     result = await db.execute(stmt)
@@ -117,17 +153,39 @@ async def list_office_config(category: str | None = None, db: AsyncSession = Dep
 
 
 @router.put("/office-config/{key}")
-async def upsert_office_config(key: str, value: str, category: str = "general", db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(OfficeConfig).where(OfficeConfig.key == key))
+async def upsert_office_config(
+    key: str,
+    value: str,
+    category: str = "general",
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    result = await db.execute(
+        select(OfficeConfig).where(OfficeConfig.tenant_id == tenant_id, OfficeConfig.key == key)
+    )
     entry = result.scalars().first()
     if entry:
         entry.value = value
         entry.category = category
     else:
-        entry = OfficeConfig(key=key, value=value, category=category)
+        entry = OfficeConfig(tenant_id=tenant_id, key=key, value=value, category=category)
         db.add(entry)
     await db.commit()
     return {"key": key, "value": value, "category": category}
+
+
+@router.post("/refresh-cache")
+async def refresh_cache(
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    """Re-load providers and availability rules into the in-memory cache for this tenant."""
+    await ref_cache.refresh(db, tenant_id)
+    return {
+        "status": "ok",
+        "providers": len(ref_cache.get_providers(tenant_id)),
+        "rules": len(ref_cache.get_rules(tenant_id)),
+    }
 
 
 # ── Call Logs ──
@@ -135,7 +193,6 @@ async def upsert_office_config(key: str, value: str, category: str = "general", 
 @router.get("/call-logs")
 async def list_call_logs(db: AsyncSession = Depends(get_db)):
     """Return all persisted call sessions with their messages."""
-    import json as _json
     result = await db.execute(
         select(CallLog).order_by(CallLog.started_at.desc())
     )

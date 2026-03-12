@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -23,6 +23,7 @@ class Appointment(Base):
     __tablename__ = "appointments"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     provider_id: Mapped[str] = mapped_column(ForeignKey("providers.id"), nullable=False)
     patient_id: Mapped[str | None] = mapped_column(ForeignKey("patients.id"), nullable=True)
     start_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -33,7 +34,8 @@ class Appointment(Base):
     patient_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     patient_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    tenant = relationship("Tenant", back_populates="appointments")
     provider = relationship("Provider", back_populates="appointments")
     patient = relationship("Patient", back_populates="appointments")

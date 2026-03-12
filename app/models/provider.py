@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -10,9 +10,11 @@ class Provider(Base):
     __tablename__ = "providers"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(50), nullable=False, default="DDS")
     specialties: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    tenant = relationship("Tenant", back_populates="providers")
     availability_rules = relationship("AvailabilityRule", back_populates="provider", cascade="all, delete-orphan")
     appointments = relationship("Appointment", back_populates="provider")

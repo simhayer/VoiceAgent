@@ -10,3 +10,6 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
     caller_phone: str
     call_sid: str
+    tenant_id: str
+    tenant_name: str
+    office_info: dict | None
