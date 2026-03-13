@@ -68,7 +68,7 @@ async def _load_tenant_context(session: CallSession) -> None:
         session.tenant_emergency_phone = tenant.emergency_phone
         session.tenant_transfer_phone = tenant.transfer_phone
 
-        office_entries = await get_all_office_info(db, session.tenant_id)
+        office_entries = await get_all_office_info(session.tenant_id)
         session.tenant_office_info = {e["key"]: e["value"] for e in office_entries}
 
 

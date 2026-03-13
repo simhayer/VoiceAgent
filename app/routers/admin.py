@@ -179,12 +179,13 @@ async def refresh_cache(
     db: AsyncSession = Depends(get_db),
     tenant_id: str = Depends(get_current_tenant_id),
 ):
-    """Re-load providers and availability rules into the in-memory cache for this tenant."""
+    """Re-load providers, availability rules, and office configs into the in-memory cache for this tenant."""
     await ref_cache.refresh(db, tenant_id)
     return {
         "status": "ok",
         "providers": len(ref_cache.get_providers(tenant_id)),
         "rules": len(ref_cache.get_rules(tenant_id)),
+        "office_configs": len(ref_cache.get_office_configs(tenant_id)),
     }
 
 

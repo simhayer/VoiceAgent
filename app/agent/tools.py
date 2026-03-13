@@ -145,7 +145,7 @@ async def get_office_info(query: str) -> str:
     Args:
         query: The topic to look up, e.g. 'office hours', 'parking', 'insurance', 'whitening price'.
     """
-    result = await _get_office_info(db=_get_db(), tenant_id=_get_tenant_id(), query=query)
+    result = await _get_office_info(tenant_id=_get_tenant_id(), query=query)
     return json.dumps(result)
 
 

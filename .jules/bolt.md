@@ -1,0 +1,3 @@
+## 2024-05-24 - Cache OfficeConfig in memory
+**Learning:** Found that `OfficeConfig` entries were being loaded from the database on every inbound voice call to initialize the LangGraph agent prompt, and again whenever the `get_office_info` tool was used. This is a critical latency bottleneck in a streaming voice pipeline where time-to-first-token is heavily impacted by database synchronous calls.
+**Action:** Always look for reference data that rarely changes and ensure it is loaded into the in-memory `cache.py` during startup (`warm_tenant`) rather than queried per-request, especially for the voice pipeline where ms matter.

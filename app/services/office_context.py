@@ -1,15 +1,11 @@
 """Office knowledge base: answers questions about the practice."""
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.office import OfficeConfig
+from app.services.cache import get_office_configs
 
 
-async def get_office_info(db: AsyncSession, tenant_id: str, query: str) -> dict:
+async def get_office_info(tenant_id: str, query: str) -> dict:
     """Search office config for information matching the caller's question."""
-    result = await db.execute(select(OfficeConfig).where(OfficeConfig.tenant_id == tenant_id))
-    all_config = list(result.scalars().all())
+    all_config = get_office_configs(tenant_id)
 
     query_lower = query.lower()
     matches = []
@@ -31,9 +27,8 @@ async def get_office_info(db: AsyncSession, tenant_id: str, query: str) -> dict:
     return {"found": True, "results": matches}
 
 
-async def get_all_office_info(db: AsyncSession, tenant_id: str) -> list[dict]:
-    result = await db.execute(select(OfficeConfig).where(OfficeConfig.tenant_id == tenant_id))
-    entries = list(result.scalars().all())
+async def get_all_office_info(tenant_id: str) -> list[dict]:
+    entries = get_office_configs(tenant_id)
     return [{"key": e.key, "value": e.value, "category": e.category} for e in entries]
 
 
