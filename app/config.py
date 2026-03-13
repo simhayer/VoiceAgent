@@ -12,12 +12,12 @@ class Settings(BaseSettings):
     # Deepgram
     deepgram_api_key: str = ""
     deepgram_utterance_end_ms: int = 1000
-    deepgram_endpointing_ms: int = 200
-    stt_barge_in_min_chars: int = 3
-    stt_barge_in_min_words: int = 1
-    stt_barge_in_min_confidence: float = 0.45
-    stt_barge_in_promotion_debounce_ms: int = 300
-    stt_early_utterance_delay_ms: int = 400
+    deepgram_endpointing_ms: int = 300
+    stt_barge_in_min_chars: int = 6
+    stt_barge_in_min_words: int = 2
+    stt_barge_in_min_confidence: float = 0.60
+    stt_barge_in_promotion_debounce_ms: int = 450
+    stt_early_utterance_delay_ms: int = 650
 
     # Cartesia (default; tenants can override voice_id)
     cartesia_api_key: str = ""
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # Server
     server_url: str = "http://localhost:8000"
     voice_state_machine_enabled: bool = True
-    agent_stream_flush_ms: int = 180
+    agent_stream_flush_ms: int = 110
     max_conversation_messages: int = 20
     call_inactivity_timeout_s: int = 30
 

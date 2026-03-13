@@ -6,7 +6,7 @@ import re
 import time
 from typing import Awaitable, Callable
 
-_REPEATED_SPEECH_THRESHOLD_S = 0.5
+_REPEATED_SPEECH_THRESHOLD_S = 0.4
 
 from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
@@ -202,7 +202,10 @@ class DeepgramSTT:
 
     _CONTINUATION_RE = re.compile(
         r"(?:[,;:\-—–]\s*$"
-        r"|\b(?:and|but|or|so|because|then|if|that|which|while|when|as|nor|yet)\s*$)",
+        r"|\b(?:and|but|or|so|because|then|if|that|which|while|when|as|nor|yet)\s*$"
+        r"|(?:\b(?:need|want|have|trying|going)\s+to\s*$)"
+        r"|(?:\b(?:let)\s+me\s*$)"
+        r"|(?:\b(?:gonna|wanna|gotta)\s*$))",
         re.IGNORECASE,
     )
 
@@ -232,7 +235,7 @@ class DeepgramSTT:
 
     async def _speech_mute_expiry(self):
         try:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.35)
             if not self._barge_in_dispatched:
                 self.session.speech_mute_active = False
                 logger.debug("Speech mute expired (no barge-in), resuming audio")

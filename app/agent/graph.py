@@ -1,9 +1,10 @@
 """LangGraph agent: ReAct-style graph with tool calling and streaming output."""
 
+import asyncio
 import logging
 import re
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 SENTENCE_BREAK_RE = re.compile(r"[.!?]\s*$")
 CLAUSE_BREAK_RE = re.compile(r"[,;:—–]\s*$")
 MAX_BUFFER_CHARS = 80
-TIME_FLUSH_MIN_CHARS = 24
+TIME_FLUSH_MIN_CHARS = 14
 
 llm = ChatOpenAI(
     model="gpt-4o-mini",
@@ -39,6 +40,21 @@ llm = ChatOpenAI(
     streaming=True,
 )
 llm_with_tools = llm.bind_tools(ALL_TOOLS)
+
+
+def _spawn_background(coro: Awaitable[object], *, label: str) -> None:
+    """Schedule telemetry work without blocking the tool path."""
+    task = asyncio.create_task(coro)
+
+    def _log_failure(done: asyncio.Task) -> None:
+        try:
+            done.result()
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("Background task failed: %s", label)
+
+    task.add_done_callback(_log_failure)
 
 
 async def agent_node(state: AgentState) -> dict:
@@ -65,8 +81,14 @@ async def tool_node(state: AgentState) -> dict:
         tool_call_id = tool_call["id"]
         logger.info("Executing tool: %s(%s)", tool_name, tool_args)
 
-        await publish_event("tool_start", call_sid, tool_name=tool_name, tool_args=tool_args, tool_call_id=tool_call_id)
-        await persist_message(call_sid, "tool_start", f"Using tool: {tool_name}", tool_name=tool_name, tool_args=tool_args)
+        _spawn_background(
+            publish_event("tool_start", call_sid, tool_name=tool_name, tool_args=tool_args, tool_call_id=tool_call_id),
+            label="tool_start publish_event",
+        )
+        _spawn_background(
+            persist_message(call_sid, "tool_start", f"Using tool: {tool_name}", tool_name=tool_name, tool_args=tool_args),
+            label="tool_start persist_message",
+        )
 
         tool_fn = tool_map.get(tool_name)
         if tool_fn:
@@ -74,8 +96,14 @@ async def tool_node(state: AgentState) -> dict:
         else:
             result = f'{{"error": "Unknown tool: {tool_name}"}}'
 
-        await publish_event("tool_end", call_sid, tool_name=tool_name, tool_call_id=tool_call_id)
-        await persist_message(call_sid, "tool_end", f"Used tool: {tool_name}", tool_name=tool_name)
+        _spawn_background(
+            publish_event("tool_end", call_sid, tool_name=tool_name, tool_call_id=tool_call_id),
+            label="tool_end publish_event",
+        )
+        _spawn_background(
+            persist_message(call_sid, "tool_end", f"Used tool: {tool_name}", tool_name=tool_name),
+            label="tool_end persist_message",
+        )
 
         tool_results.append(
             ToolMessage(content=str(result), tool_call_id=tool_call["id"])
