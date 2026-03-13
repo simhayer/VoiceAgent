@@ -191,10 +191,15 @@ async def refresh_cache(
 # ── Call Logs ──
 
 @router.get("/call-logs")
-async def list_call_logs(db: AsyncSession = Depends(get_db)):
+async def list_call_logs(
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
     """Return all persisted call sessions with their messages."""
     result = await db.execute(
-        select(CallLog).order_by(CallLog.started_at.desc())
+        select(CallLog)
+        .where(CallLog.tenant_id == tenant_id)
+        .order_by(CallLog.started_at.desc())
     )
     logs = result.scalars().all()
 

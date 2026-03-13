@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models.call_log import CallLog, CallMessage
@@ -13,7 +12,7 @@ from app.models.call_log import CallLog, CallMessage
 logger = logging.getLogger(__name__)
 
 
-async def persist_call_started(call_sid: str, caller_phone: str) -> None:
+async def persist_call_started(call_sid: str, caller_phone: str, tenant_id: str) -> None:
     """Create a new CallLog row when a call begins."""
     try:
         async with async_session() as db:
@@ -24,6 +23,7 @@ async def persist_call_started(call_sid: str, caller_phone: str) -> None:
                 return  # already recorded (idempotent)
             log = CallLog(
                 call_sid=call_sid,
+                tenant_id=tenant_id,
                 caller_phone=caller_phone or "Unknown",
                 status="active",
                 started_at=datetime.now(timezone.utc),

@@ -41,7 +41,7 @@ async def run_pipeline(websocket: WebSocket):
         if realtime:
             await realtime.close()
         if session.call_sid:
-            await publish_event("call_ended", session.call_sid)
+            await publish_event("call_ended", session.call_sid, tenant_id=session.tenant_id)
             await persist_call_ended(session.call_sid)
         logger.info("Pipeline cleaned up for call %s", session.call_sid)
 
@@ -105,8 +105,17 @@ async def _receive_loop(websocket: WebSocket, session: CallSession) -> RealtimeS
                 session.tenant_id,
             )
 
-            asyncio.create_task(publish_event("call_started", session.call_sid, caller_phone=session.caller_phone))
-            asyncio.create_task(persist_call_started(session.call_sid, session.caller_phone))
+            asyncio.create_task(
+                publish_event(
+                    "call_started",
+                    session.call_sid,
+                    caller_phone=session.caller_phone,
+                    tenant_id=session.tenant_id,
+                )
+            )
+            asyncio.create_task(
+                persist_call_started(session.call_sid, session.caller_phone, session.tenant_id)
+            )
 
             await _load_tenant_context(session)
 
@@ -114,7 +123,14 @@ async def _receive_loop(websocket: WebSocket, session: CallSession) -> RealtimeS
             greeting = session.tenant_greeting or DEFAULT_GREETING
             await realtime.send_greeting(greeting)
 
-            asyncio.create_task(publish_event("agent_transcript", session.call_sid, text=greeting))
+            asyncio.create_task(
+                publish_event(
+                    "agent_transcript",
+                    session.call_sid,
+                    text=greeting,
+                    tenant_id=session.tenant_id,
+                )
+            )
             asyncio.create_task(persist_message(session.call_sid, "assistant", greeting))
 
         elif event == "media" and realtime:
@@ -140,7 +156,14 @@ async def _create_realtime_session(session: CallSession) -> RealtimeSession:
 
     async def on_transcript(role: str, text: str):
         event_name = "user_transcript" if role == "user" else "agent_transcript"
-        asyncio.create_task(publish_event(event_name, session.call_sid, text=text))
+        asyncio.create_task(
+            publish_event(
+                event_name,
+                session.call_sid,
+                text=text,
+                tenant_id=session.tenant_id,
+            )
+        )
         asyncio.create_task(persist_message(session.call_sid, role, text))
 
     async def on_response_done():

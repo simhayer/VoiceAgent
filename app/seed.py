@@ -4,7 +4,6 @@ import asyncio
 
 from sqlalchemy import select
 
-from app.auth import hash_password
 from app.database import async_session
 from app.models import AvailabilityRule, OfficeConfig, Patient, Provider, Tenant, User
 
@@ -45,7 +44,7 @@ async def seed():
             admin_user = User(
                 tenant_id=DEMO_TENANT_ID,
                 email="admin@example.com",
-                hashed_password=hash_password("admin123"),
+                supabase_user_id="REPLACE_WITH_YOUR_SUPABASE_USER_ID",
                 role="super_admin",
             )
             db.add(admin_user)

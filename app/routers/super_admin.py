@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import hash_password, require_super_admin
+from app.auth import require_super_admin
 from app.database import get_db
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -55,7 +55,7 @@ class TenantOut(BaseModel):
 
 class TenantUserCreate(BaseModel):
     email: str
-    password: str
+    supabase_user_id: str
     role: str = "admin"
 
 
@@ -190,7 +190,7 @@ async def create_tenant_user(
     user = User(
         tenant_id=tenant_id,
         email=body.email,
-        hashed_password=hash_password(body.password),
+        supabase_user_id=body.supabase_user_id,
         role=body.role,
     )
     db.add(user)

@@ -33,9 +33,8 @@ websockets = ">=12.0"
 # OpenAI Realtime
 openai = ">=1.0.0"
 
-# Auth
+# Auth (Supabase JWT verification)
 pyjwt = ">=2.0.0"
-passlib = {version = ">=1.7.0", extras = ["bcrypt"]}
 
 # Dashboard / pub-sub
 redis = "^7.3.0"
@@ -43,6 +42,7 @@ redis = "^7.3.0"
 # Misc
 python-multipart = ">=0.0.9"
 psycopg2-binary = "^2.9.11"
+cryptography = "^46.0.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0"
