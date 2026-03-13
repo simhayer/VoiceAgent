@@ -27,17 +27,11 @@ python-dotenv = ">=1.0.0"
 httpx = ">=0.28.0"
 
 # Voice pipeline
-deepgram-sdk = ">=3.0.0"
-cartesia = ">=1.0.0"
 twilio = ">=9.0.0"
 websockets = ">=12.0"
-audioop-lts = {version = ">=0.2.1", python = ">=3.13"}
 
-# Agent framework
-langgraph = ">=0.4.0"
-langchain-openai = ">=0.3.0"
+# OpenAI Realtime
 openai = ">=1.0.0"
-greenlet = "^3.3.2"
 
 # Auth
 pyjwt = ">=2.0.0"

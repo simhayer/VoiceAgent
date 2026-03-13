@@ -9,23 +9,10 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
 
-    # Deepgram
-    deepgram_api_key: str = ""
-    deepgram_utterance_end_ms: int = 1000
-    deepgram_endpointing_ms: int = 300
-    stt_barge_in_min_chars: int = 6
-    stt_barge_in_min_words: int = 2
-    stt_barge_in_min_confidence: float = 0.60
-    stt_barge_in_promotion_debounce_ms: int = 450
-    stt_early_utterance_delay_ms: int = 650
-
-    # Cartesia (default; tenants can override voice_id)
-    cartesia_api_key: str = ""
-    cartesia_voice_id: str = ""
-    cartesia_speed: str = "normal"
-
     # OpenAI
     openai_api_key: str = ""
+    openai_realtime_model: str = "gpt-4o-mini-realtime-preview"
+    openai_realtime_voice: str = "coral"
 
     # JWT
     jwt_secret_key: str = "change-me-in-production"
@@ -34,9 +21,6 @@ class Settings(BaseSettings):
 
     # Server
     server_url: str = "http://localhost:8000"
-    voice_state_machine_enabled: bool = True
-    agent_stream_flush_ms: int = 110
-    max_conversation_messages: int = 20
     call_inactivity_timeout_s: int = 30
 
     # Redis (for dashboard pub/sub)
