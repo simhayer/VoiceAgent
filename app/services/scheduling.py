@@ -59,10 +59,10 @@ async def get_available_slots(
             while cursor + timedelta(minutes=duration) <= block_end_dt:
                 slot_end = cursor + timedelta(minutes=duration)
 
-                if _slot_matches_time_of_day(cursor, time_of_day) and not _has_conflict_mem(
+                prov = provider_map.get(rule.provider_id)
+                if prov and _slot_matches_time_of_day(cursor, time_of_day) and not _has_conflict_mem(
                     existing_appointments, rule.provider_id, cursor, slot_end
                 ):
-                    prov = provider_map[rule.provider_id]
                     all_slots.append({
                         "provider_id": prov.id,
                         "provider_name": prov.name,
@@ -137,9 +137,12 @@ async def book_appointment(
         "appointment_id": appointment.id,
         "provider_name": provider.name,
         "procedure_type": procedure_type,
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat(),
         "date": start_time.strftime("%A, %B %d, %Y"),
         "time": start_time.strftime("%I:%M %p"),
         "duration_minutes": duration,
+        "patient_name": patient_name,
     }
 
 

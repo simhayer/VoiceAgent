@@ -35,6 +35,8 @@ OnAudioDelta = Callable[[str], Awaitable[None]]
 OnSpeechStarted = Callable[[], Awaitable[None]]
 OnTranscript = Callable[[str, str], Awaitable[None]]  # (role, text)
 OnResponseDone = Callable[[], Awaitable[None]]
+OnTokenDelta = Callable[[str], Awaitable[None]]  # (partial text)
+OnToolCall = Callable[[str, str, str, str], Awaitable[None]]  # (tool_call_id, tool_name, status, result)
 
 
 class RealtimeSession:
@@ -55,6 +57,8 @@ class RealtimeSession:
         openai_realtime_model: str | None = None,
         openai_realtime_voice: str | None = None,
         system_prompt_override: str | None = None,
+        on_token_delta: OnTokenDelta | None = None,
+        on_tool_call: OnToolCall | None = None,
     ):
         self.tenant_id = tenant_id
         self.tenant_name = tenant_name
@@ -69,6 +73,8 @@ class RealtimeSession:
         self._on_speech_started = on_speech_started
         self._on_transcript = on_transcript
         self._on_response_done = on_response_done
+        self._on_token_delta = on_token_delta
+        self._on_tool_call = on_tool_call
 
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._receive_task: asyncio.Task | None = None
@@ -190,7 +196,7 @@ class RealtimeSession:
             "item": {
                 "type": "message",
                 "role": "assistant",
-                "content": [{"type": "input_text", "text": greeting_text}],
+                "content": [{"type": "text", "text": greeting_text}],
             },
         })
         await self._send({"type": "response.create"})
@@ -202,7 +208,7 @@ class RealtimeSession:
             "item": {
                 "type": "message",
                 "role": "assistant",
-                "content": [{"type": "input_text", "text": text}],
+                "content": [{"type": "text", "text": text}],
             },
         })
         await self._send({"type": "response.create"})
@@ -250,6 +256,12 @@ class RealtimeSession:
             logger.debug("VAD speech started")
             await self._on_speech_started()
 
+        elif etype == "response.audio_transcript.delta":
+            # Word-by-word streaming delta for assistant speech
+            delta = event.get("delta", "")
+            if delta and self._on_token_delta:
+                await self._on_token_delta(delta)
+
         elif etype == "response.audio_transcript.done":
             text = event.get("transcript", "")
             if text:
@@ -285,7 +297,6 @@ class RealtimeSession:
             "response.content_part.added",
             "response.content_part.done",
             "response.audio.done",
-            "response.audio_transcript.delta",
             "response.text.delta",
             "response.text.done",
             "conversation.item.created",
@@ -311,6 +322,14 @@ class RealtimeSession:
 
         logger.info("Tool call received name=%s call_id=%s", fn_name, call_id)
 
+        # Notify dashboard of tool_start
+        if self._on_tool_call:
+            try:
+                args = json.loads(raw_args) if raw_args else {}
+            except json.JSONDecodeError:
+                args = {}
+            await self._on_tool_call(call_id, fn_name, "start", json.dumps(args))
+
         handler = TOOL_DISPATCH.get(fn_name)
         if not handler:
             result = json.dumps({"error": f"Unknown tool: {fn_name}"})
@@ -333,6 +352,10 @@ class RealtimeSession:
 
         elapsed_ms = int((time.monotonic() - t0) * 1000)
         logger.info("Tool call completed name=%s elapsed_ms=%d", fn_name, elapsed_ms)
+
+        # Notify dashboard of tool_end
+        if self._on_tool_call:
+            await self._on_tool_call(call_id, fn_name, "end", result)
 
         await self._send({
             "type": "conversation.item.create",

@@ -34,7 +34,11 @@ class Appointment(Base):
     patient_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     patient_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        default=datetime.utcnow,
+    )
 
     tenant = relationship("Tenant", back_populates="appointments")
     provider = relationship("Provider", back_populates="appointments")
