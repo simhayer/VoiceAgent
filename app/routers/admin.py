@@ -1,14 +1,16 @@
 """Admin REST API for managing dental office data, scoped by tenant."""
 
 import json as _json
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_tenant_id
+from pydantic import BaseModel
+
+from app.auth import get_current_tenant_id, get_current_user
 from app.database import get_db
 from app.models.appointment import Appointment
 from app.models.availability import AvailabilityRule
@@ -16,10 +18,12 @@ from app.models.call_log import CallLog, CallMessage
 from app.models.office import OfficeConfig
 from app.models.patient import Patient
 from app.models.provider import Provider
-from app.schemas.appointment import AppointmentOut
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.schemas.appointment import AppointmentCreate, AppointmentOut
 from app.schemas.patient import PatientCreate, PatientOut
 from app.services import cache as ref_cache
-from app.services.scheduling import cancel_appointment
+from app.services.scheduling import book_appointment, cancel_appointment
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -84,9 +88,9 @@ async def list_appointments(
     if status:
         stmt = stmt.where(Appointment.status == status)
     if date_from:
-        stmt = stmt.where(Appointment.start_time >= date_from.isoformat())
+        stmt = stmt.where(Appointment.start_time >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        stmt = stmt.where(Appointment.start_time <= date_to.isoformat() + "T23:59:59")
+        stmt = stmt.where(Appointment.start_time <= datetime.combine(date_to, datetime.max.time()))
     stmt = stmt.order_by(Appointment.start_time)
     result = await db.execute(stmt)
     appointments = result.scalars().all()
@@ -109,6 +113,52 @@ async def cancel(
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@router.post("/appointments", response_model=AppointmentOut)
+async def create_appointment(
+    data: AppointmentCreate,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    # Resolve provider_id from provider_name if needed
+    provider_id = data.provider_id
+    if not provider_id and data.provider_name:
+        result = await db.execute(
+            select(Provider).where(
+                Provider.tenant_id == tenant_id,
+                Provider.name.ilike(f"%{data.provider_name}%"),
+            )
+        )
+        prov = result.scalars().first()
+        if prov:
+            provider_id = prov.id
+    if not provider_id:
+        raise HTTPException(status_code=400, detail="provider_id or valid provider_name is required")
+
+    result = await book_appointment(
+        db=db,
+        tenant_id=tenant_id,
+        provider_id=provider_id,
+        procedure_type=data.procedure_type,
+        start_time=data.start_time,
+        patient_name=data.patient_name,
+        patient_phone=data.patient_phone,
+        notes=data.notes,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    # Fetch the full appointment to return AppointmentOut
+    stmt = (
+        select(Appointment)
+        .options(selectinload(Appointment.provider))
+        .where(Appointment.id == result["appointment_id"])
+    )
+    appt = (await db.execute(stmt)).scalars().first()
+    out = AppointmentOut.model_validate(appt)
+    out.provider_name = appt.provider.name if appt.provider else None
+    return out
 
 
 @router.get("/patients", response_model=list[PatientOut])
@@ -230,3 +280,154 @@ async def list_call_logs(
             ],
         })
     return out
+
+
+# ── Account (self-service tenant profile) ──
+
+
+class AccountOut(BaseModel):
+    id: str
+    name: str
+    slug: str
+    twilio_phone_number: str | None
+    cartesia_voice_id: str | None
+    greeting_message: str | None
+    system_prompt_override: str | None
+    emergency_phone: str | None
+    transfer_phone: str | None
+    timezone: str
+    plan: str
+    is_active: bool
+    user_email: str
+    user_role: str
+
+    model_config = {"from_attributes": True}
+
+
+class AccountUpdate(BaseModel):
+    name: str | None = None
+    twilio_phone_number: str | None = None
+    greeting_message: str | None = None
+    system_prompt_override: str | None = None
+    emergency_phone: str | None = None
+    transfer_phone: str | None = None
+    timezone: str | None = None
+    line_of_business: str | None = None
+    client_count: int | None = None
+
+
+@router.get("/account", response_model=AccountOut)
+async def get_account(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return the current user's tenant profile."""
+    result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # Also count clients (patients) for this tenant
+    patients_result = await db.execute(
+        select(Patient).where(Patient.tenant_id == user.tenant_id)
+    )
+    patient_count = len(patients_result.scalars().all())
+
+    return AccountOut(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        twilio_phone_number=tenant.twilio_phone_number,
+        cartesia_voice_id=tenant.cartesia_voice_id,
+        greeting_message=tenant.greeting_message,
+        system_prompt_override=tenant.system_prompt_override,
+        emergency_phone=tenant.emergency_phone,
+        transfer_phone=tenant.transfer_phone,
+        timezone=tenant.timezone,
+        plan=tenant.plan,
+        is_active=tenant.is_active,
+        user_email=user.email,
+        user_role=user.role,
+    )
+
+
+@router.put("/account", response_model=AccountOut)
+async def update_account(
+    body: AccountUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Update the current user's tenant profile (self-service)."""
+    result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+
+    # line_of_business and client_count are stored in office_config, not tenant
+    lob = update_data.pop("line_of_business", None)
+    client_count = update_data.pop("client_count", None)
+
+    # Check phone uniqueness if changing phone number
+    new_phone = update_data.get("twilio_phone_number")
+    if new_phone and new_phone != tenant.twilio_phone_number:
+        phone_exists = await db.execute(
+            select(Tenant).where(
+                Tenant.twilio_phone_number == new_phone,
+                Tenant.id != tenant.id,
+            )
+        )
+        if phone_exists.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail="Phone number already assigned to another tenant",
+            )
+
+    for field, value in update_data.items():
+        setattr(tenant, field, value)
+
+    # Persist line_of_business / client_count in office_config
+    for config_key, config_value in [
+        ("line_of_business", lob),
+        ("client_count", client_count),
+    ]:
+        if config_value is not None:
+            cfg_result = await db.execute(
+                select(OfficeConfig).where(
+                    OfficeConfig.tenant_id == user.tenant_id,
+                    OfficeConfig.key == config_key,
+                )
+            )
+            cfg = cfg_result.scalars().first()
+            if cfg:
+                cfg.value = str(config_value)
+            else:
+                db.add(
+                    OfficeConfig(
+                        tenant_id=user.tenant_id,
+                        key=config_key,
+                        value=str(config_value),
+                        category="account",
+                    )
+                )
+
+    await db.commit()
+    await db.refresh(tenant)
+
+    return AccountOut(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        twilio_phone_number=tenant.twilio_phone_number,
+        cartesia_voice_id=tenant.cartesia_voice_id,
+        greeting_message=tenant.greeting_message,
+        system_prompt_override=tenant.system_prompt_override,
+        emergency_phone=tenant.emergency_phone,
+        transfer_phone=tenant.transfer_phone,
+        timezone=tenant.timezone,
+        plan=tenant.plan,
+        is_active=tenant.is_active,
+        user_email=user.email,
+        user_role=user.role,
+    )

@@ -22,6 +22,13 @@ class CallLog(Base):
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Token usage (populated when call ends)
+    llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    voice_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     messages: Mapped[list["CallMessage"]] = relationship(
         "CallMessage", back_populates="call_log", order_by="CallMessage.sequence",
         cascade="all, delete-orphan",
