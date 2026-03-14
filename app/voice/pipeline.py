@@ -169,6 +169,77 @@ async def _create_realtime_session(session: CallSession) -> RealtimeSession:
     async def on_response_done():
         pass
 
+    async def on_token_delta(delta: str):
+        """Stream word-by-word transcript deltas to the dashboard."""
+        asyncio.create_task(
+            publish_event(
+                "agent_token_delta",
+                session.call_sid,
+                delta=delta,
+                tenant_id=session.tenant_id,
+            )
+        )
+
+    async def on_tool_call(tool_call_id: str, tool_name: str, status: str, result: str):
+        """Notify the dashboard of tool start/end events."""
+        event_type = "tool_start" if status == "start" else "tool_end"
+        payload: dict = {
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "tenant_id": session.tenant_id,
+        }
+        if status == "start":
+            try:
+                payload["tool_args"] = json.loads(result)
+            except Exception:
+                payload["tool_args"] = {}
+        else:
+            payload["tool_result"] = result
+            # If this was a book_appointment tool, also emit a special event
+            if tool_name == "book_appointment":
+                try:
+                    booking = json.loads(result)
+                    logger.info("book_appointment result: success=%s data=%s", booking.get("success"), result)
+                    if booking.get("success"):
+                        asyncio.create_task(
+                            publish_event(
+                                "appointment_booked",
+                                session.call_sid,
+                                tenant_id=session.tenant_id,
+                                appointment={k: v for k, v in booking.items() if k != "success"},
+                            )
+                        )
+                except Exception:
+                    logger.exception("Failed to parse book_appointment result")
+
+        asyncio.create_task(
+            publish_event(event_type, session.call_sid, **payload)
+        )
+        # Persist tool messages in call log
+        if status == "start":
+            try:
+                tool_args_dict = json.loads(result)
+            except Exception:
+                tool_args_dict = {}
+            asyncio.create_task(
+                persist_message(
+                    session.call_sid,
+                    event_type,
+                    f"Using tool: {tool_name}",
+                    tool_name=tool_name,
+                    tool_args=tool_args_dict,
+                )
+            )
+        else:
+            asyncio.create_task(
+                persist_message(
+                    session.call_sid,
+                    event_type,
+                    f"Used tool: {tool_name}",
+                    tool_name=tool_name,
+                )
+            )
+
     rt = RealtimeSession(
         tenant_id=session.tenant_id,
         tenant_name=session.tenant_name,
@@ -179,6 +250,8 @@ async def _create_realtime_session(session: CallSession) -> RealtimeSession:
         on_speech_started=on_speech_started,
         on_transcript=on_transcript,
         on_response_done=on_response_done,
+        on_token_delta=on_token_delta,
+        on_tool_call=on_tool_call,
     )
     await rt.connect()
     await rt.configure_session()

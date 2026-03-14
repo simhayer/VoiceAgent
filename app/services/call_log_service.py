@@ -1,5 +1,6 @@
 """Service for persisting call logs and messages to the database."""
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -10,6 +11,10 @@ from app.database import async_session
 from app.models.call_log import CallLog, CallMessage
 
 logger = logging.getLogger(__name__)
+
+# Max retries when CallLog row hasn't been created yet (race with fire-and-forget tasks)
+_MSG_RETRY_ATTEMPTS = 5
+_MSG_RETRY_DELAY_S = 0.3
 
 
 async def persist_call_started(call_sid: str, caller_phone: str, tenant_id: str) -> None:
@@ -57,37 +62,48 @@ async def persist_message(
     tool_name: str | None = None,
     tool_args: dict | None = None,
 ) -> None:
-    """Append a transcript / tool message to an existing CallLog."""
-    try:
-        async with async_session() as db:
-            result = await db.execute(
-                select(CallLog).where(CallLog.call_sid == call_sid)
-            )
-            log = result.scalars().first()
-            if not log:
-                logger.warning("persist_message: no CallLog for %s", call_sid)
+    """Append a transcript / tool message to an existing CallLog.
+
+    Retries a few times with short async sleeps if the CallLog row
+    hasn't been committed yet (race with the fire-and-forget
+    persist_call_started task).
+    """
+    for attempt in range(_MSG_RETRY_ATTEMPTS):
+        try:
+            async with async_session() as db:
+                result = await db.execute(
+                    select(CallLog).where(CallLog.call_sid == call_sid)
+                )
+                log = result.scalars().first()
+                if not log:
+                    if attempt < _MSG_RETRY_ATTEMPTS - 1:
+                        await asyncio.sleep(_MSG_RETRY_DELAY_S)
+                        continue
+                    logger.warning("persist_message: no CallLog for %s after %d retries", call_sid, _MSG_RETRY_ATTEMPTS)
+                    return
+
+                # Determine next sequence number
+                msg_result = await db.execute(
+                    select(CallMessage)
+                    .where(CallMessage.call_log_id == log.id)
+                    .order_by(CallMessage.sequence.desc())
+                    .limit(1)
+                )
+                last = msg_result.scalars().first()
+                seq = (last.sequence + 1) if last else 0
+
+                msg = CallMessage(
+                    call_log_id=log.id,
+                    role=role,
+                    content=content,
+                    tool_name=tool_name,
+                    tool_args=json.dumps(tool_args) if tool_args else None,
+                    sequence=seq,
+                    timestamp=datetime.now(timezone.utc),
+                )
+                db.add(msg)
+                await db.commit()
                 return
-
-            # Determine next sequence number
-            msg_result = await db.execute(
-                select(CallMessage)
-                .where(CallMessage.call_log_id == log.id)
-                .order_by(CallMessage.sequence.desc())
-                .limit(1)
-            )
-            last = msg_result.scalars().first()
-            seq = (last.sequence + 1) if last else 0
-
-            msg = CallMessage(
-                call_log_id=log.id,
-                role=role,
-                content=content,
-                tool_name=tool_name,
-                tool_args=json.dumps(tool_args) if tool_args else None,
-                sequence=seq,
-                timestamp=datetime.now(timezone.utc),
-            )
-            db.add(msg)
-            await db.commit()
-    except Exception:
-        logger.exception("Failed to persist message for %s", call_sid)
+        except Exception:
+            logger.exception("Failed to persist message for %s (attempt %d)", call_sid, attempt + 1)
+            return

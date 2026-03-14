@@ -187,7 +187,7 @@ TOOL_DEFINITIONS: list[dict] = [
     {
         "type": "function",
         "name": "book_appointment",
-        "description": "Book a confirmed appointment. Only call this AFTER the patient has confirmed a specific time slot.",
+        "description": "Book a confirmed appointment. You MUST call this tool to finalize any booking — never tell the patient an appointment is booked without calling this first. Only call after the patient has confirmed a specific time slot.",
         "parameters": {
             "type": "object",
             "properties": {
