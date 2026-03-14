@@ -25,6 +25,7 @@ from app.agent.tools import (
 )
 from app.config import settings
 from app.database import async_session
+from app.services.tenant_runtime import TenantRuntimeConfig
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,9 @@ class RealtimeSession:
         on_speech_started: OnSpeechStarted,
         on_transcript: OnTranscript,
         on_response_done: OnResponseDone,
+        openai_realtime_model: str | None = None,
+        openai_realtime_voice: str | None = None,
+        system_prompt_override: str | None = None,
         on_token_delta: OnTokenDelta | None = None,
         on_tool_call: OnToolCall | None = None,
     ):
@@ -61,6 +65,9 @@ class RealtimeSession:
         self.office_info = office_info
         self.emergency_phone = emergency_phone
         self.transfer_phone = transfer_phone
+        self._openai_model = openai_realtime_model
+        self._openai_voice = openai_realtime_voice
+        self._system_prompt_override = system_prompt_override
 
         self._on_audio_delta = on_audio_delta
         self._on_speech_started = on_speech_started
@@ -73,32 +80,37 @@ class RealtimeSession:
         self._receive_task: asyncio.Task | None = None
         self._is_open = False
         self._session_configured = asyncio.Event()
+        self._connected_model: str | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     async def connect(self):
-        url = OPENAI_REALTIME_URL.format(model=settings.openai_realtime_model)
+        model = self._openai_model or settings.openai_realtime_model
+        url = OPENAI_REALTIME_URL.format(model=model)
         headers = {
             "Authorization": f"Bearer {settings.openai_api_key}",
             "OpenAI-Beta": "realtime=v1",
         }
         self._ws = await websockets.connect(url, additional_headers=headers, max_size=None)
         self._is_open = True
+        self._connected_model = model
         self._receive_task = asyncio.create_task(self._receive_loop())
-        logger.info("OpenAI Realtime WS connected model=%s", settings.openai_realtime_model)
+        logger.info("OpenAI Realtime WS connected model=%s", model)
 
-    async def configure_session(self):
+    def _build_session_update(self) -> dict:
         instructions = get_system_prompt(
             tenant_name=self.tenant_name,
             office_info=self.office_info,
+            system_prompt_override=self._system_prompt_override,
         )
-        session_update = {
+        voice = self._openai_voice or settings.openai_realtime_voice
+        return {
             "type": "session.update",
             "session": {
                 "instructions": instructions,
-                "voice": settings.openai_realtime_voice,
+                "voice": voice,
                 "input_audio_format": "g711_ulaw",
                 "output_audio_format": "g711_ulaw",
                 "turn_detection": {
@@ -114,9 +126,37 @@ class RealtimeSession:
                 "tool_choice": "auto",
             },
         }
-        await self._send(session_update)
+
+    async def configure_session(self):
+        await self._send(self._build_session_update())
         logger.info("Session update sent, awaiting confirmation")
         await asyncio.wait_for(self._session_configured.wait(), timeout=10.0)
+
+    async def apply_tenant_config(self, config: TenantRuntimeConfig) -> None:
+        """Apply runtime tenant updates to the active realtime session."""
+        self.tenant_name = config.name
+        self.office_info = dict(config.office_info)
+        self.emergency_phone = config.emergency_phone
+        self.transfer_phone = config.transfer_phone
+        self._system_prompt_override = config.system_prompt_override
+        self._openai_voice = config.openai_realtime_voice
+
+        requested_model = config.openai_realtime_model or settings.openai_realtime_model
+        if self._connected_model and requested_model != self._connected_model:
+            logger.info(
+                "Tenant %s requested realtime model change from %s to %s during an active call; "
+                "the new model will be used for the next call",
+                self.tenant_id,
+                self._connected_model,
+                requested_model,
+            )
+            self._openai_model = config.openai_realtime_model
+
+        if not self._is_open:
+            return
+
+        await self._send(self._build_session_update())
+        logger.info("Applied live tenant configuration update for tenant %s", self.tenant_id)
 
     async def close(self):
         self._is_open = False
@@ -131,6 +171,7 @@ class RealtimeSession:
                 await self._ws.close()
             except Exception:
                 pass
+        self._connected_model = None
         logger.info("OpenAI Realtime WS closed")
 
     # ------------------------------------------------------------------

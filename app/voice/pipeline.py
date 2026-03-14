@@ -12,10 +12,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.config import settings
 from app.database import async_session
+from app.services import active_calls, tenant_runtime
 from app.services.call_log_service import persist_call_ended, persist_call_started, persist_message
-from app.services.office_context import get_all_office_info
 from app.services.pubsub import publish_event
-from app.services.tenant_service import get_tenant_by_id
 from app.voice.realtime import RealtimeSession
 from app.voice.session import CallSession
 
@@ -38,6 +37,8 @@ async def run_pipeline(websocket: WebSocket):
         logger.exception("Pipeline error for call %s", session.call_sid)
     finally:
         session.is_active = False
+        if session.call_sid:
+            active_calls.unregister_call(session.call_sid)
         if realtime:
             await realtime.close()
         if session.call_sid:
@@ -120,6 +121,13 @@ async def _receive_loop(websocket: WebSocket, session: CallSession) -> RealtimeS
             await _load_tenant_context(session)
 
             realtime = await _create_realtime_session(session)
+            if session.call_sid:
+                active_calls.register_call(
+                    session.call_sid,
+                    session.tenant_id,
+                    session,
+                    realtime,
+                )
             greeting = session.tenant_greeting or DEFAULT_GREETING
             await realtime.send_greeting(greeting)
 
@@ -250,6 +258,9 @@ async def _create_realtime_session(session: CallSession) -> RealtimeSession:
         on_speech_started=on_speech_started,
         on_transcript=on_transcript,
         on_response_done=on_response_done,
+        openai_realtime_model=session.tenant_openai_model,
+        openai_realtime_voice=session.tenant_openai_voice,
+        system_prompt_override=session.tenant_system_prompt_override,
         on_token_delta=on_token_delta,
         on_tool_call=on_tool_call,
     )
@@ -259,18 +270,19 @@ async def _create_realtime_session(session: CallSession) -> RealtimeSession:
 
 
 async def _load_tenant_context(session: CallSession) -> None:
-    """Load tenant details and office config from the database into the session."""
-    async with async_session() as db:
-        tenant = await get_tenant_by_id(db, session.tenant_id)
-        if not tenant:
-            logger.warning("Tenant %s not found during pipeline init", session.tenant_id)
-            session.tenant_name = "Our Office"
-            return
+    """Load tenant details, agent settings, and office config from the database into the session."""
+    config = tenant_runtime.get_tenant_config(session.tenant_id)
+    if not config:
+        async with async_session() as db:
+            config = await tenant_runtime.refresh_tenant(db, session.tenant_id)
 
-        session.tenant_name = tenant.name
-        session.tenant_greeting = tenant.greeting_message or f"Hi, thank you for calling {tenant.name}! How can I help you today?"
-        session.tenant_emergency_phone = tenant.emergency_phone
-        session.tenant_transfer_phone = tenant.transfer_phone
+    if not config:
+        logger.warning("Tenant %s not found during pipeline init", session.tenant_id)
+        session.tenant_name = "Our Office"
+        return
 
-        office_entries = await get_all_office_info(db, session.tenant_id)
-        session.tenant_office_info = {e["key"]: e["value"] for e in office_entries}
+    session.apply_runtime_config(config)
+    if not session.tenant_greeting:
+        session.tenant_greeting = (
+            f"Hi, thank you for calling {session.tenant_name}! How can I help you today?"
+        )

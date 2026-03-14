@@ -22,6 +22,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.appointment import AppointmentCreate, AppointmentOut
 from app.schemas.patient import PatientCreate, PatientOut
+from app.services import active_calls, tenant_runtime
 from app.services import cache as ref_cache
 from app.services.scheduling import book_appointment, cancel_appointment
 
@@ -221,6 +222,8 @@ async def upsert_office_config(
         entry = OfficeConfig(tenant_id=tenant_id, key=key, value=value, category=category)
         db.add(entry)
     await db.commit()
+    config = await tenant_runtime.refresh_tenant(db, tenant_id)
+    await active_calls.propagate_tenant_config(tenant_id, config)
     return {"key": key, "value": value, "category": category}
 
 
