@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.services import tenant_runtime
 from app.services.tenant_service import resolve_tenant_by_phone
 from app.voice.pipeline import run_pipeline
 
@@ -27,8 +28,18 @@ async def incoming_call(request: Request, db: AsyncSession = Depends(get_db)):
     called_number = form_data.get("To", "")
     caller_phone = form_data.get("From", "Unknown")
 
-    tenant = await resolve_tenant_by_phone(db, called_number)
-    if not tenant:
+    tenant_config = tenant_runtime.get_tenant_config_by_phone(called_number)
+    tenant_id = tenant_config.tenant_id if tenant_config else None
+    tenant_name = tenant_config.name if tenant_config else None
+
+    if not tenant_id:
+        tenant = await resolve_tenant_by_phone(db, called_number)
+        if tenant:
+            tenant_id = tenant.id
+            tenant_name = tenant.name
+            await tenant_runtime.refresh_tenant(db, tenant.id)
+
+    if not tenant_id:
         logger.warning("No tenant found for called number %s", called_number)
         twiml = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -45,12 +56,12 @@ async def incoming_call(request: Request, db: AsyncSession = Depends(get_db)):
     <Connect>
         <Stream url="{stream_url}">
             <Parameter name="callerPhone" value="{caller_phone}" />
-            <Parameter name="tenantId" value="{tenant.id}" />
+            <Parameter name="tenantId" value="{tenant_id}" />
         </Stream>
     </Connect>
 </Response>"""
 
-    logger.info("Incoming call for tenant %s (%s) — directing to stream", tenant.name, tenant.id)
+    logger.info("Incoming call for tenant %s (%s) — directing to stream", tenant_name, tenant_id)
     return Response(content=twiml, media_type="application/xml")
 
 

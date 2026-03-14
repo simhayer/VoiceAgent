@@ -32,3 +32,9 @@ class Tenant(Base):
     appointments = relationship("Appointment", back_populates="tenant")
     office_configs = relationship("OfficeConfig", back_populates="tenant")
     users = relationship("User", back_populates="tenant")
+    agent_settings = relationship(
+        "TenantAgentSettings",
+        back_populates="tenant",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

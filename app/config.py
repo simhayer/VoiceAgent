@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Redis (for dashboard pub/sub)
     redis_url: str = "redis://localhost:6379"
+    tenant_runtime_refresh_interval_s: int = 5
 
     @field_validator("supabase_url", "supabase_anon_key", mode="before")
     @classmethod

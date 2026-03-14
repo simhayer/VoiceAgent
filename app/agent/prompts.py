@@ -3,7 +3,13 @@
 from datetime import date
 
 
-def get_system_prompt(tenant_name: str, office_info: dict | None = None) -> str:
+def get_system_prompt(
+    tenant_name: str,
+    office_info: dict | None = None,
+    system_prompt_override: str | None = None,
+) -> str:
+    if system_prompt_override and system_prompt_override.strip():
+        return system_prompt_override.strip()
     today = date.today()
     info = office_info or {}
     return SYSTEM_PROMPT_TEMPLATE.format(
