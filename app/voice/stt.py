@@ -6,14 +6,14 @@ import re
 import time
 from typing import Awaitable, Callable
 
-_REPEATED_SPEECH_THRESHOLD_S = 0.4
-
 from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
 from deepgram.listen import ListenV1Results, ListenV1SpeechStarted, ListenV1UtteranceEnd
 
 from app.config import settings
 from app.voice.session import CallSession
+
+_REPEATED_SPEECH_THRESHOLD_S = 0.4
 
 logger = logging.getLogger(__name__)
 
