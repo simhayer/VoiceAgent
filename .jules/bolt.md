@@ -1,0 +1,3 @@
+## 2026-03-15 - Prevent N+1 query loops using selectinload with relationship order_by
+**Learning:** When retrieving a collection of entities along with their children (e.g., CallLog and its CallMessages), iterating through the parent entities and issuing a separate query to fetch the children for each parent creates a severe N+1 performance bottleneck. SQLAlchemy relationships configured with `order_by` (like `CallLog.messages`) automatically maintain the defined sorting, making manual sorted queries unnecessary.
+**Action:** Use `selectinload()` or similar eager loading strategies instead of looping to fetch relationships. Leverage the pre-configured `order_by` on the SQLAlchemy model relationship rather than explicitly ordering in a manual subquery.
