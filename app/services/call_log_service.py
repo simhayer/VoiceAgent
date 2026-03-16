@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models.call_log import CallLog, CallMessage

@@ -12,7 +12,7 @@ from app.auth import get_current_tenant_id
 from app.database import get_db
 from app.models.appointment import Appointment
 from app.models.availability import AvailabilityRule
-from app.models.call_log import CallLog, CallMessage
+from app.models.call_log import CallLog
 from app.models.office import OfficeConfig
 from app.models.patient import Patient
 from app.models.provider import Provider
@@ -193,19 +193,17 @@ async def refresh_cache(
 @router.get("/call-logs")
 async def list_call_logs(db: AsyncSession = Depends(get_db)):
     """Return all persisted call sessions with their messages."""
+    # ⚡ Bolt: Prevent N+1 query by eagerly loading messages in a single DB roundtrip.
+    # The CallLog model specifies order_by="CallMessage.sequence" on the relationship.
     result = await db.execute(
-        select(CallLog).order_by(CallLog.started_at.desc())
+        select(CallLog)
+        .options(selectinload(CallLog.messages))
+        .order_by(CallLog.started_at.desc())
     )
     logs = result.scalars().all()
 
     out = []
     for log in logs:
-        msgs_result = await db.execute(
-            select(CallMessage)
-            .where(CallMessage.call_log_id == log.id)
-            .order_by(CallMessage.sequence)
-        )
-        msgs = msgs_result.scalars().all()
         out.append({
             "call_sid": log.call_sid,
             "caller_phone": log.caller_phone,
@@ -221,7 +219,7 @@ async def list_call_logs(db: AsyncSession = Depends(get_db)):
                     "tool_name": m.tool_name,
                     "tool_args": _json.loads(m.tool_args) if m.tool_args else None,
                 }
-                for m in msgs
+                for m in log.messages
             ],
         })
     return out
