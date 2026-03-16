@@ -1,7 +1,5 @@
 """WebSocket endpoint for the live dashboard UI."""
 
-import asyncio
-import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
